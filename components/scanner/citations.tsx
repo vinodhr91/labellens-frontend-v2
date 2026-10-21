@@ -171,10 +171,7 @@ function CitationModal({
         </div>
 
         <div className="mt-4 rounded-2xl border-3 border-toy-ink bg-[#eef8ff] p-4 shadow-[0_2px_0_0_var(--toy-ink)]">
-          <p className="font-display text-xs font-bold uppercase tracking-wider text-toy-orange">
-            Plain-English Scientific Guidance
-          </p>
-          <p className="mt-1.5 text-sm font-semibold leading-relaxed text-toy-ink text-pretty">
+          <p className="text-sm sm:text-base font-semibold leading-relaxed text-toy-ink text-pretty">
             {citation.explanation}
           </p>
         </div>

@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, CheckCircle2, RotateCcw, Utensils, Users } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, RotateCcw, Utensils, Users, X } from 'lucide-react'
 import { findMetric, toNumber, type AnalysisResult } from '@/lib/scanner'
-import { addProductToProfilePlate, getActiveProfileName } from '@/lib/storage'
+import { addProductToProfilePlate, getActiveProfile, getActiveProfileName } from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { VerdictStamp } from './verdict-stamp'
 import { SugarBottle } from './sugar-bottle'
@@ -34,9 +34,13 @@ export function StepResults({
   onPlateUpdated?: () => void
 }) {
   const profileName = initialProfileName || getActiveProfileName()
+  const activeProfile = getActiveProfile()
 
-  // Determine initial age mode based on scanned demographic
+  // Determine initial age mode based on scanned demographic or active profile
   const [ageMode, setAgeMode] = useState<'adult' | 'child'>(() => {
+    if (activeProfile?.age_group) {
+      return activeProfile.age_group === '10+' ? 'adult' : 'child'
+    }
     const demo = (result.demographic || '').toLowerCase()
     if (
       demo.includes('1-3') ||
@@ -50,9 +54,21 @@ export function StepResults({
     return 'adult'
   })
 
+  // Category of the active profile
+  const profileAgeCategory = (() => {
+    if (activeProfile?.age_group) {
+      return activeProfile.age_group === '10+' ? 'adult' : 'child'
+    }
+    const demo = (result.demographic || '').toLowerCase()
+    return demo.includes('1-3') || demo.includes('4-6') || demo.includes('7-9') || demo.includes('under') || demo.includes('child')
+      ? 'child'
+      : 'adult'
+  })()
+
   // State for Daily Plate action & Toast
   const [addedToPlate, setAddedToPlate] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [showMismatchModal, setShowMismatchModal] = useState(false)
 
   // Raw nutrient values from analysis
   const rawSugar = findMetric(result.breakdown, ['sugar', 'sugars', 'total_sugar', 'added_sugar'])
@@ -79,8 +95,8 @@ export function StepResults({
   // Standard RDA limits for adult (FSSAI/WHO) vs child (ICMR-NIN)
   const limits =
     ageMode === 'adult'
-      ? { sugar: 50, satFat: 22, sodium: 2000, label: 'Age 10 and over (Adult Limits)' }
-      : { sugar: 42, satFat: 18, sodium: 1200, label: 'Age 7–9 (Child Limits)' }
+      ? { sugar: 50, satFat: 22, sodium: 2000, label: 'Age 10 and over (Adult Limits)', name: 'Adult (10+)' }
+      : { sugar: 42, satFat: 18, sodium: 1200, label: 'Age 7–9 (Child Limits)', name: 'Child (7–9)' }
 
   // Recalculated percentages based on active ageMode
   const sugarPct = Math.round((sugarGrams / limits.sugar) * 100 * 10) / 10
@@ -97,8 +113,8 @@ export function StepResults({
   const dynamicVerdict =
     flags.length > 0 ? `⚠️ EXCEEDS DAILY LIMIT: ${flags.join(', ')}` : `✅ WITHIN DAILY LIMITS`
 
-  // Add to Profile's Plate handler
-  const handleAddToPlate = () => {
+  // Execute add to profile plate
+  const performAddToPlate = () => {
     const res = addProductToProfilePlate(profileName, {
       product: result.product || 'Scanned Food Product',
       serving_size: result.serving_size,
@@ -113,6 +129,17 @@ export function StepResults({
       if (onPlateUpdated) onPlateUpdated()
       setTimeout(() => setToastMessage(null), 4000)
     }
+  }
+
+  // Handle click on Add to Plate button with mismatch check
+  const handleAddToPlateClick = () => {
+    // Check if user toggled to a different age group than profile
+    const isMismatch = ageMode !== profileAgeCategory
+    if (isMismatch) {
+      setShowMismatchModal(true)
+      return
+    }
+    performAddToPlate()
   }
 
   return (
@@ -239,7 +266,7 @@ export function StepResults({
       <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
         <button
           type="button"
-          onClick={handleAddToPlate}
+          onClick={handleAddToPlateClick}
           className={`toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink py-4 text-lg font-bold shadow-[0_4px_0_0_var(--toy-ink)] transition-all cursor-pointer ${
             addedToPlate
               ? 'bg-toy-green text-white'
@@ -259,6 +286,74 @@ export function StepResults({
           )}
         </button>
       </motion.div>
+
+      {/* Mismatch Confirmation Modal */}
+      <AnimatePresence>
+        {showMismatchModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
+            onClick={() => setShowMismatchModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.88, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.88, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 25 }}
+              className="toy-block relative w-full max-w-sm bg-white p-6 shadow-2xl text-left"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="mismatch-title"
+            >
+              <button
+                type="button"
+                onClick={() => setShowMismatchModal(false)}
+                className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink transition-transform hover:scale-110 cursor-pointer"
+                aria-label="Close dialog"
+              >
+                <X className="size-4" strokeWidth={3} />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-toy-orange text-white shadow-[0_2px_0_0_var(--toy-ink)]">
+                  <AlertTriangle className="size-6" strokeWidth={2.7} />
+                </span>
+                <h4 id="mismatch-title" className="font-display text-xl font-bold text-toy-ink">
+                  Confirm Add to Plate
+                </h4>
+              </div>
+
+              {/* Exact user requested text */}
+              <p className="mt-4 text-sm sm:text-base font-semibold leading-relaxed text-toy-ink text-pretty">
+                You are viewing the limits for {limits.name}, but your active profile is {profileName}. Do you want to add this to {profileName}&apos;s plate?
+              </p>
+
+              {/* Requested Buttons: [ Yes, add for [Profile Name] ] and [ Cancel ] */}
+              <div className="mt-6 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    performAddToPlate()
+                    setShowMismatchModal(false)
+                  }}
+                  className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-2xl border-4 border-toy-ink bg-toy-yellow py-3 text-base font-bold text-toy-ink shadow-[0_4px_0_0_var(--toy-ink)] hover:brightness-105 cursor-pointer"
+                >
+                  <Check className="size-5 stroke-[3]" />
+                  <span>Yes, add for {profileName}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMismatchModal(false)}
+                  className="font-display w-full rounded-xl border-2 border-toy-ink bg-muted py-2.5 text-sm font-bold text-toy-ink transition-colors hover:bg-muted/80 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {result.other_nutrients && <NutrientsGrid nutrients={result.other_nutrients} />}
 

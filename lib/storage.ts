@@ -73,6 +73,17 @@ export function saveStoredProfile(profile: {
   }
 }
 
+export function getActiveProfile(): Profile | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const activeName = getActiveProfileName()
+    const profiles = getStoredProfiles()
+    return profiles.find((p) => p.name.toLowerCase() === activeName.toLowerCase()) || profiles[0] || null
+  } catch {
+    return null
+  }
+}
+
 export function getActiveProfileName(): string {
   if (typeof window === 'undefined') return 'My Profile'
   try {

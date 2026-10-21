@@ -115,47 +115,49 @@ export function ScannerApp() {
         )}
       </AnimatePresence>
 
-      {/* 3. Bottom Navigation Bar with two tabs: [ 📷 Scan ] and [ 🍽️ Today's Plate ] */}
-      <nav
-        aria-label="Bottom Navigation"
-        className="fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4"
-      >
-        <div className="toy-block flex items-center justify-around border-3 bg-white/95 p-1.5 shadow-[0_4px_0_0_var(--toy-ink)] backdrop-blur-md">
-          <button
-            type="button"
-            onClick={() => setActiveTab('scanner')}
-            className={`font-display flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
-              activeTab === 'scanner'
-                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
-                : 'text-toy-ink/65 hover:text-toy-ink'
-            }`}
-          >
-            <Camera className="size-4 stroke-[2.5]" />
-            <span>📷 Scan</span>
-          </button>
+      {/* Bottom Navigation Bar: Only show after onboarding (step > 1 or on plate tab) */}
+      {(step > 1 || activeTab === 'plate') && (
+        <nav
+          aria-label="Bottom Navigation"
+          className="fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4"
+        >
+          <div className="toy-block flex items-center justify-around border-3 bg-white/95 p-1.5 shadow-[0_4px_0_0_var(--toy-ink)] backdrop-blur-md">
+            <button
+              type="button"
+              onClick={() => setActiveTab('scanner')}
+              className={`font-display flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
+                activeTab === 'scanner'
+                  ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                  : 'text-toy-ink/65 hover:text-toy-ink'
+              }`}
+            >
+              <Camera className="size-4 stroke-[2.5]" />
+              <span>📷 Scan</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              syncData()
-              setActiveTab('plate')
-            }}
-            className={`font-display relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
-              activeTab === 'plate'
-                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
-                : 'text-toy-ink/65 hover:text-toy-ink'
-            }`}
-          >
-            <UtensilsCrossed className="size-4 stroke-[2.5]" />
-            <span>🍽️ Today&apos;s Plate</span>
-            {plateCount > 0 && (
-              <span className="flex size-5 items-center justify-center rounded-full border border-toy-ink bg-toy-red text-[10px] font-black text-white shadow-[0_1px_0_0_var(--toy-ink)]">
-                {plateCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </nav>
+            <button
+              type="button"
+              onClick={() => {
+                syncData()
+                setActiveTab('plate')
+              }}
+              className={`font-display relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
+                activeTab === 'plate'
+                  ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                  : 'text-toy-ink/65 hover:text-toy-ink'
+              }`}
+            >
+              <UtensilsCrossed className="size-4 stroke-[2.5]" />
+              <span>🍽️ Today&apos;s Plate</span>
+              {plateCount > 0 && (
+                <span className="flex size-5 items-center justify-center rounded-full border border-toy-ink bg-toy-red text-[10px] font-black text-white shadow-[0_1px_0_0_var(--toy-ink)]">
+                  {plateCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </nav>
+      )}
     </main>
   )
 }

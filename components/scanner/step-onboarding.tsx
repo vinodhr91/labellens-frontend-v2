@@ -63,12 +63,8 @@ export function StepOnboarding({
     const stored = getStoredProfiles()
     setProfiles(stored)
     if (stored.length > 0) {
-      const active = stored[0]
-      setActiveProfileId(active.id)
-      setProfileName(active.name)
-      onGenderChange(active.gender as Gender)
-      onAgeGroupChange(active.age_group as AgeGroup)
-      if (onProfileChange) onProfileChange(active.name)
+      setProfileName(stored[0].name)
+      if (onProfileChange) onProfileChange(stored[0].name)
     }
   }, [])
 
@@ -139,52 +135,6 @@ export function StepOnboarding({
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="onboarding-title">
-      {/* 2. Profiles Bar & Paywall Trigger */}
-      <div className="toy-block p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-toy-ink">
-            <Users className="size-4" />
-            <h3 className="font-display text-sm font-bold uppercase tracking-wider">Family Profiles</h3>
-          </div>
-          <span className="font-display rounded-full border-2 border-toy-ink bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">
-            {profiles.length}/1 Free Profile
-          </span>
-        </div>
-
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          {profiles.map((p) => {
-            const isSelected = activeProfileId === p.id
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleSelectProfile(p)}
-                className={`font-display inline-flex cursor-pointer items-center gap-1.5 rounded-full border-3 border-toy-ink px-3.5 py-1 text-sm font-bold transition-transform hover:scale-105 active:scale-95 ${
-                  isSelected
-                    ? 'bg-toy-yellow text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)]'
-                    : 'bg-white text-toy-ink/75 hover:bg-muted'
-                }`}
-              >
-                <UserCheck className="size-3.5" />
-                <span>{p.name}</span>
-              </button>
-            )
-          })}
-
-          <button
-            type="button"
-            onClick={handleAddProfileClick}
-            className="font-display inline-flex cursor-pointer items-center gap-1 rounded-full border-2 border-dashed border-toy-ink/60 bg-white/70 px-3 py-1 text-xs font-bold text-toy-ink hover:border-toy-ink hover:bg-white"
-          >
-            <Plus className="size-3.5" />
-            <span>Add Profile</span>
-            {profiles.length >= 1 && (
-              <span className="rounded bg-toy-yellow px-1 py-0.2 text-[10px] font-black text-toy-ink">PRO</span>
-            )}
-          </button>
-        </div>
-      </div>
-
       {/* Main Selection & Swipe-to-Lock Avatar Card */}
       <div className="toy-block flex flex-col items-center gap-4 p-5 text-center">
         <div>
@@ -284,12 +234,57 @@ export function StepOnboarding({
                 Ready for {profileName ? `${profileName} · ` : ''}{gender} ({ageGroup && AGE_LABELS[ageGroup]})!
               </p>
             ) : (
-              <p className="font-display flex items-center justify-center gap-1.5 text-xs font-bold text-toy-ink/70">
-                <Sparkles className="size-3.5 text-toy-orange animate-spin" />
-                <span>Cycling avatars... Select gender & age to lock in!</span>
+              <p className="font-display text-sm font-bold text-toy-ink/75">
+                Who are we checking this for?
               </p>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* FAMILY PROFILES SECTION - Moved to the bottom, below the animated avatar and cycling text */}
+      <div className="toy-block p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-toy-ink">
+            <Users className="size-4" />
+            <h3 className="font-display text-sm font-bold uppercase tracking-wider">Family Profiles</h3>
+          </div>
+          <span className="font-display rounded-full border-2 border-toy-ink bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">
+            {profiles.length}/1 Free Profile
+          </span>
+        </div>
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          {profiles.map((p) => {
+            const isSelected = activeProfileId === p.id
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleSelectProfile(p)}
+                className={`font-display inline-flex cursor-pointer items-center gap-1.5 rounded-full border-3 border-toy-ink px-3.5 py-1 text-sm font-bold transition-transform hover:scale-105 active:scale-95 ${
+                  isSelected
+                    ? 'bg-toy-yellow text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)]'
+                    : 'bg-white text-toy-ink/75 hover:bg-muted'
+                }`}
+              >
+                <UserCheck className="size-3.5" />
+                <span>{p.name}</span>
+              </button>
+            )
+          })}
+
+          <button
+            type="button"
+            onClick={handleAddProfileClick}
+            className="font-display inline-flex cursor-pointer items-center gap-1 rounded-full border-2 border-dashed border-toy-ink/60 bg-white/70 px-3 py-1 text-xs font-bold text-toy-ink hover:border-toy-ink hover:bg-white"
+          >
+            <Plus className="size-3.5" />
+            <span>Add Profile</span>
+            {profiles.length >= 1 && (
+              <span className="rounded bg-toy-yellow px-1 py-0.2 text-[10px] font-black text-toy-ink">PRO</span>
+            )}
+          </button>
         </div>
       </div>
 
