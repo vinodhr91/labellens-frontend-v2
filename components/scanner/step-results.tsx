@@ -65,6 +65,12 @@ export function StepResults({
       : 'adult'
   })()
 
+  // Badge text: Show active profile name, or '(What-If)' if age toggle is flipped to a different group
+  const isWhatIf = ageMode !== profileAgeCategory
+  const badgeText = isWhatIf
+    ? `Breakdown for: ${ageMode === 'adult' ? 'Adult' : 'Child'} (What-If)`
+    : `Breakdown for: ${profileName}`
+
   // State for Daily Plate action & Toast
   const [addedToPlate, setAddedToPlate] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -175,14 +181,16 @@ export function StepResults({
       </AnimatePresence>
 
       <div className="flex flex-col items-center gap-4">
-        {/* Top Demographic Badge - Responsive & never cut off on mobile */}
+        {/* Top Profile / Demographic Badge - Responsive & never cut off on mobile */}
         <div className="w-full max-w-full px-2 flex justify-center">
           <motion.span
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+            key={badgeText}
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             className="font-display max-w-full text-center px-4 py-1.5 text-sm sm:text-base md:text-lg font-bold text-toy-ink rounded-full border-4 border-toy-ink bg-toy-yellow shadow-[0_3px_0_0_var(--toy-ink)] shrink-0 inline-flex items-center justify-center break-words text-balance"
           >
-            {result.demographic ? `${result.demographic} · ${limits.label}` : limits.label}
+            {badgeText}
           </motion.span>
         </div>
 
