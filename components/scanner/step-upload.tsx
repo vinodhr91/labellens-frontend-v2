@@ -1,14 +1,43 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, Info, Loader2, ScanLine } from 'lucide-react'
+import { ArrowLeft, Info, ScanLine } from 'lucide-react'
 import { API_URL, type AgeGroup, type AnalysisResult, type Gender } from '@/lib/scanner'
 import { cn } from '@/lib/utils'
 import { ToyButton } from './toy-button'
 import { UploadBox, type PickedImage } from './upload-box'
 
 type Layout = 'same' | 'separate' | null
+
+const HEALTH_FACTS = [
+  'Some major brands use cheaper oils in Indian products compared to their European versions.',
+  'Food companies use over 40 different names for sugar (like Maltodextrin and Invert Syrup) to hide it.',
+  'The average Indian consumes 2x the recommended daily sugar limit.',
+  'A standard 250ml soft drink contains roughly 7 teaspoons of sugar—almost your entire daily limit.',
+  'We track Sodium because high salt intake is a leading cause of hypertension in India.',
+  'We track Saturated Fat because it raises LDL (bad) cholesterol and increases heart disease risk.',
+  "'No Added Sugar' doesn't mean sugar-free. It often contains natural sugars or artificial sweeteners.",
+  'Ingredients are listed in order of weight. If sugar is first, the product is mostly sugar.',
+  'Maltodextrin has a higher glycemic index than table sugar, meaning it spikes your blood sugar faster.',
+  'The Nestlé Cerelac controversy revealed higher sugar levels in India compared to Europe.',
+  "'Sugar-free' products often contain sugar alcohols that can cause digestive issues.",
+  'Packaged health drinks marketed for kids often have sugar as their second ingredient.',
+  '1 teaspoon of sugar is roughly 4 grams.',
+  '70% of the salt we eat is already hidden in processed foods.',
+  'Ultra-processed foods are designed to be hyper-palatable, making it hard to eat just one.',
+]
+
+function shuffleFacts(facts: string[]): string[] {
+  const arr = [...facts]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const temp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = temp
+  }
+  return arr
+}
 
 export function StepUpload({
   gender,
@@ -26,11 +55,27 @@ export function StepUpload({
   const [image2, setImage2] = useState<PickedImage | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [shuffledFacts, setShuffledFacts] = useState<string[]>(() => shuffleFacts(HEALTH_FACTS))
+  const [factIndex, setFactIndex] = useState(0)
+
+  // Carousel timer: every 2.5 seconds smoothly advance to the next fact
+  useEffect(() => {
+    if (!loading || shuffledFacts.length === 0) return
+
+    const interval = setInterval(() => {
+      setFactIndex((prev) => (prev + 1) % shuffledFacts.length)
+    }, 2500)
+
+    return () => clearInterval(interval)
+  }, [loading, shuffledFacts])
 
   const canScan = !!image1 && (layout === 'same' || (layout === 'separate' && !!image2)) && !loading
 
   async function handleScan() {
     if (!image1) return
+    // Randomize the facts array on every scan so user rarely sees same fact twice in a row
+    setShuffledFacts(shuffleFacts(HEALTH_FACTS))
+    setFactIndex(0)
     setLoading(true)
     setError(null)
     try {
@@ -126,10 +171,10 @@ export function StepUpload({
         </ToyButton>
         <ToyButton onClick={handleScan} disabled={!canScan} className="flex-1 py-5 text-2xl">
           {loading ? (
-            <>
-              <Loader2 className="size-7 animate-spin" strokeWidth={3} aria-hidden="true" />
+            <span className="flex items-center justify-center gap-2">
+              <ScanLine className="size-7 animate-pulse" strokeWidth={3} aria-hidden="true" />
               Scanning…
-            </>
+            </span>
           ) : (
             <>
               <ScanLine className="size-7" strokeWidth={3} aria-hidden="true" />
@@ -138,11 +183,44 @@ export function StepUpload({
           )}
         </ToyButton>
       </div>
-      {loading && (
-        <p className="text-center text-sm font-semibold text-toy-ink/80" aria-live="polite">
-          Reading the label… the first scan can take up to a minute while the server wakes up.
-        </p>
-      )}
+
+      {/* Randomized "Did You Know?" loading carousel */}
+      <AnimatePresence>
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0, y: 15, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -15, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="toy-block bg-toy-yellow/20 border-4 border-toy-ink p-5 flex flex-col items-center gap-3 text-center"
+            aria-live="polite"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border-2 border-toy-ink bg-toy-yellow px-3 py-1 text-xs font-black uppercase tracking-wider text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]">
+              <span>💡</span> Did You Know?
+            </div>
+
+            <div className="relative min-h-[85px] w-full flex items-center justify-center overflow-hidden">
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={factIndex}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.35, ease: 'easeInOut' }}
+                  className="font-display text-base sm:text-lg font-bold text-toy-ink leading-snug px-2"
+                >
+                  &ldquo;{shuffledFacts[factIndex]}&rdquo;
+                </motion.p>
+              </AnimatePresence>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1 text-xs font-bold text-toy-ink/75">
+              <span className="size-2 rounded-full bg-toy-ink animate-ping" />
+              <span>Reading your food label… the first scan can take up to a minute!</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   )
 }
