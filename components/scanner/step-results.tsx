@@ -325,10 +325,10 @@ export function StepResults({
 
               {/* Exact user requested text */}
               <p className="mt-4 text-sm sm:text-base font-semibold leading-relaxed text-toy-ink text-pretty">
-                You are viewing the limits for {limits.name}, but your active profile is {profileName}. Do you want to add this to {profileName}&apos;s plate?
+                You are viewing limits for {limits.name}, but your active profile is {profileName}. Add this to {profileName}&apos;s plate?
               </p>
 
-              {/* Requested Buttons: [ Yes, add for [Profile Name] ] and [ Cancel ] */}
+              {/* Requested Buttons: [ Yes ] and [ Cancel ] */}
               <div className="mt-6 flex flex-col gap-2.5">
                 <button
                   type="button"
@@ -339,7 +339,7 @@ export function StepResults({
                   className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-2xl border-4 border-toy-ink bg-toy-yellow py-3 text-base font-bold text-toy-ink shadow-[0_4px_0_0_var(--toy-ink)] hover:brightness-105 cursor-pointer"
                 >
                   <Check className="size-5 stroke-[3]" />
-                  <span>Yes, add for {profileName}</span>
+                  <span>Yes</span>
                 </button>
 
                 <button

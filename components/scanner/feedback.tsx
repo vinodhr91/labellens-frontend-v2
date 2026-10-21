@@ -51,8 +51,9 @@ export function Feedback() {
   )
 }
 
-function FeedbackModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (reasons: string[]) => void }) {
-  const [selected, setSelected] = useState<string[]>([])
+function FeedbackModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (reason: string) => void }) {
+  const [selectedReason, setSelectedReason] = useState<string>('')
+  const [otherText, setOtherText] = useState('')
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -61,6 +62,17 @@ function FeedbackModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedReason) return
+    const finalReason = selectedReason === 'Other' && otherText.trim()
+      ? `Other: ${otherText.trim()}`
+      : selectedReason
+    onSubmit(finalReason)
+  }
+
+  const isSubmitDisabled = !selectedReason || (selectedReason === 'Other' && !otherText.trim())
 
   return (
     <motion.div
@@ -91,52 +103,74 @@ function FeedbackModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex size-9 items-center justify-center rounded-full border-[3px] border-toy-ink bg-white text-toy-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-toy-yellow"
+            className="flex size-9 items-center justify-center rounded-full border-[3px] border-toy-ink bg-white text-toy-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-toy-yellow cursor-pointer"
           >
             <X className="size-5" strokeWidth={3} aria-hidden="true" />
           </button>
         </div>
 
-        <form
-          className="mt-4 flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            onSubmit(selected)
-          }}
-        >
+        <form className="mt-4 flex flex-col gap-3" onSubmit={handleSubmit}>
           <fieldset className="flex flex-col gap-2">
-            <legend className="sr-only">Select all that apply</legend>
+            <legend className="sr-only">Select reason</legend>
             {REASONS.map((reason) => {
-              const checked = selected.includes(reason)
+              const checked = selectedReason === reason
               return (
                 <label
                   key={reason}
-                  className={`font-display flex cursor-pointer items-center gap-3 rounded-2xl border-[3px] border-toy-ink px-4 py-3 text-lg font-semibold text-toy-ink transition-colors focus-within:ring-4 focus-within:ring-toy-yellow ${
-                    checked ? 'bg-toy-yellow' : 'bg-[#eef8ff]'
+                  className={`font-display flex cursor-pointer items-center gap-3 rounded-2xl border-[3px] border-toy-ink px-4 py-3 text-base font-semibold text-toy-ink transition-colors focus-within:ring-4 focus-within:ring-toy-yellow ${
+                    checked ? 'bg-toy-yellow shadow-[0_2px_0_0_var(--toy-ink)]' : 'bg-[#eef8ff]'
                   }`}
                 >
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="feedback-reason"
                     className="sr-only"
                     checked={checked}
-                    onChange={() =>
-                      setSelected((prev) => (checked ? prev.filter((r) => r !== reason) : [...prev, reason]))
-                    }
+                    onChange={() => setSelectedReason(reason)}
                   />
                   <span
-                    className={`flex size-7 shrink-0 items-center justify-center rounded-lg border-[3px] border-toy-ink ${
+                    className={`flex size-6 shrink-0 items-center justify-center rounded-full border-[3px] border-toy-ink ${
                       checked ? 'bg-toy-green' : 'bg-white'
                     }`}
                     aria-hidden="true"
                   >
-                    {checked && <Check className="size-4 text-white" strokeWidth={4} />}
+                    {checked && <span className="size-2 rounded-full bg-white" />}
                   </span>
-                  {reason}
+                  <span>{reason}</span>
                 </label>
               )
             })}
           </fieldset>
-          <ToyButton type="submit" disabled={selected.length === 0} className="mt-2 w-full">
+
+          {/* Dynamically show text input box when 'Other' radio button is selected */}
+          <AnimatePresence>
+            {selectedReason === 'Other' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-col gap-1 pt-1">
+                  <label htmlFor="other-detail-input" className="text-xs font-bold text-toy-ink uppercase tracking-wider">
+                    Specify your issue:
+                  </label>
+                  <input
+                    id="other-detail-input"
+                    type="text"
+                    autoFocus
+                    placeholder="Type your specific issue here..."
+                    value={otherText}
+                    onChange={(e) => setOtherText(e.target.value)}
+                    className="font-display w-full rounded-xl border-3 border-toy-ink bg-[#f8fbff] px-3.5 py-2.5 text-sm font-bold text-toy-ink focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-toy-yellow shadow-[0_2px_0_0_var(--toy-ink)]"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <ToyButton type="submit" disabled={isSubmitDisabled} className="mt-2 w-full">
             Submit
           </ToyButton>
         </form>

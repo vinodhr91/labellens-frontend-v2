@@ -23,6 +23,7 @@ export function DailyPlateDashboard({
 }) {
   const [items, setItems] = useState<PlateItem[]>([])
   const profileName = initialProfileName || getActiveProfileName()
+  const formattedDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   useEffect(() => {
     setItems(getTodayPlateItems(profileName))
@@ -73,7 +74,7 @@ export function DailyPlateDashboard({
             <UtensilsCrossed className="size-5" />
           </span>
           <h2 id="dashboard-title" className="font-display text-2xl sm:text-3xl font-bold text-toy-ink text-balance">
-            Today&apos;s Plate for {profileName}
+            Today&apos;s Plate for {profileName} • {formattedDate}
           </h2>
         </div>
 

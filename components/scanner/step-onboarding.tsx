@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ArrowRight, Lock, Plus, Sparkles, User, UserCheck, Users } from 'lucide-react'
+import { ChevronDown, ArrowRight, Lock, Plus, User, UserCheck, Users } from 'lucide-react'
 import Image from 'next/image'
 import { AGE_GROUPS, GENDERS, type AgeGroup, type Gender } from '@/lib/scanner'
 import {
@@ -44,6 +44,7 @@ export function StepOnboarding({
   onAgeGroupChange,
   onNext,
   onProfileChange,
+  onProfileLockedChange,
 }: {
   gender: Gender | ''
   ageGroup: AgeGroup | ''
@@ -51,24 +52,30 @@ export function StepOnboarding({
   onAgeGroupChange: (a: AgeGroup) => void
   onNext: () => void
   onProfileChange?: (name: string) => void
+  onProfileLockedChange?: (locked: boolean) => void
 }) {
   const [profiles, setProfiles] = useState<Profile[]>([])
-  const [profileName, setProfileName] = useState('My Son')
+  // Profile Name input has empty value initially, using placeholder 'e.g., My Son'
+  const [profileName, setProfileName] = useState('')
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null)
   const [showPaywall, setShowPaywall] = useState(false)
   const [cycleIndex, setCycleIndex] = useState(0)
 
-  // Load profiles from localStorage on mount
+  // Load profiles from localStorage on mount (do NOT auto-populate gender/age so avatar cycles)
   useEffect(() => {
     const stored = getStoredProfiles()
     setProfiles(stored)
-    if (stored.length > 0) {
-      setProfileName(stored[0].name)
-      if (onProfileChange) onProfileChange(stored[0].name)
-    }
   }, [])
 
+  // Avatar only locks in after BOTH Gender and Age are selected
   const isLocked = Boolean(gender && ageGroup)
+
+  // Notify parent of lock state
+  useEffect(() => {
+    if (onProfileLockedChange) {
+      onProfileLockedChange(isLocked)
+    }
+  }, [isLocked, onProfileLockedChange])
 
   // Autocycle through avatars every 1.6s when unlocked
   useEffect(() => {
@@ -88,18 +95,23 @@ export function StepOnboarding({
 
   // Handle clicking "+ Add Profile"
   const handleAddProfileClick = () => {
+    if (!isLocked) return
+
     // If user already has 1 profile, trigger Freemium Paywall modal
     if (profiles.length >= 1) {
       setShowPaywall(true)
-    } else {
-      setActiveProfileId(null)
-      setProfileName('')
-      onGenderChange('' as Gender)
-      onAgeGroupChange('' as AgeGroup)
+      return
     }
+
+    // Reset all form fields to empty and restart avatar cycling animation
+    setActiveProfileId(null)
+    setProfileName('')
+    onGenderChange('' as Gender)
+    onAgeGroupChange('' as AgeGroup)
+    if (onProfileChange) onProfileChange('')
   }
 
-  // Handle selecting a saved profile
+  // Handle selecting an existing saved profile
   const handleSelectProfile = (p: Profile) => {
     setActiveProfileId(p.id)
     setProfileName(p.name)
@@ -146,7 +158,7 @@ export function StepOnboarding({
           </p>
         </div>
 
-        {/* Profile Name Input */}
+        {/* Profile Name Input - Empty value, placeholder 'e.g., My Son' */}
         <div className="w-full flex flex-col gap-1 text-left">
           <label htmlFor="profile-name-input" className="font-display text-sm font-bold text-toy-ink flex items-center gap-1.5">
             <User className="size-3.5" />
@@ -214,7 +226,7 @@ export function StepOnboarding({
               )}
             </AnimatePresence>
 
-            {/* Lock in Badge */}
+            {/* Lock in Badge: Only appears after both Gender and Age are selected */}
             {isLocked && (
               <motion.div
                 initial={{ scale: 0, y: 10 }}
@@ -228,12 +240,9 @@ export function StepOnboarding({
             )}
           </div>
 
+          {/* Subtitle text: 'Who are we checking this for?'. Hidden once profile is locked in */}
           <div className="min-h-6 pt-1">
-            {isLocked ? (
-              <p className="font-display text-base font-bold text-toy-ink">
-                Ready for {profileName ? `${profileName} · ` : ''}{gender} ({ageGroup && AGE_LABELS[ageGroup]})!
-              </p>
-            ) : (
+            {!isLocked && (
               <p className="font-display text-sm font-bold text-toy-ink/75">
                 Who are we checking this for?
               </p>
@@ -242,7 +251,7 @@ export function StepOnboarding({
         </div>
       </div>
 
-      {/* FAMILY PROFILES SECTION - Moved to the bottom, below the animated avatar and cycling text */}
+      {/* FAMILY PROFILES SECTION - Located at the very bottom */}
       <div className="toy-block p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-toy-ink">
@@ -274,10 +283,16 @@ export function StepOnboarding({
             )
           })}
 
+          {/* Add Profile button: Disabled (greyed out) until current profile is locked in */}
           <button
             type="button"
             onClick={handleAddProfileClick}
-            className="font-display inline-flex cursor-pointer items-center gap-1 rounded-full border-2 border-dashed border-toy-ink/60 bg-white/70 px-3 py-1 text-xs font-bold text-toy-ink hover:border-toy-ink hover:bg-white"
+            disabled={!isLocked}
+            className={`font-display inline-flex items-center gap-1 rounded-full border-2 border-dashed px-3 py-1 text-xs font-bold transition-all ${
+              !isLocked
+                ? 'border-toy-ink/30 bg-muted/40 text-muted-foreground/50 opacity-40 cursor-not-allowed'
+                : 'border-toy-ink/60 bg-white/70 text-toy-ink hover:border-toy-ink hover:bg-white cursor-pointer'
+            }`}
           >
             <Plus className="size-3.5" />
             <span>Add Profile</span>

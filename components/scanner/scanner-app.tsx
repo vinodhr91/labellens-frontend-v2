@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Camera, ScanLine, UtensilsCrossed } from 'lucide-react'
 import type { AgeGroup, AnalysisResult, Gender } from '@/lib/scanner'
-import { getActiveProfileName, getTodayPlateItems } from '@/lib/storage'
+import { getActiveProfileName, getStoredProfiles, getTodayPlateItems } from '@/lib/storage'
 import { StepOnboarding } from './step-onboarding'
 import { StepUpload } from './step-upload'
 import { StepResults } from './step-results'
@@ -19,14 +19,18 @@ export function ScannerApp() {
   const [gender, setGender] = useState<Gender | ''>('')
   const [ageGroup, setAgeGroup] = useState<AgeGroup | ''>('')
   const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [profileName, setProfileName] = useState<string>('My Son')
+  const [profileName, setProfileName] = useState<string>('')
   const [plateCount, setPlateCount] = useState(0)
+  const [hasLockedFirstProfile, setHasLockedFirstProfile] = useState(false)
 
   // Sync active profile and plate items count
   const syncData = () => {
     const currentName = getActiveProfileName()
     setProfileName(currentName)
     setPlateCount(getTodayPlateItems(currentName).length)
+    if (getStoredProfiles().length > 0) {
+      setHasLockedFirstProfile(true)
+    }
   }
 
   useEffect(() => {
@@ -82,7 +86,13 @@ export function ScannerApp() {
                   setProfileName(name)
                   setPlateCount(getTodayPlateItems(name).length)
                 }}
-                onNext={() => setStep(2)}
+                onProfileLockedChange={(locked) => {
+                  if (locked) setHasLockedFirstProfile(true)
+                }}
+                onNext={() => {
+                  setHasLockedFirstProfile(true)
+                  setStep(2)
+                }}
               />
             )}
             {step === 2 && gender && ageGroup && (
@@ -115,8 +125,8 @@ export function ScannerApp() {
         )}
       </AnimatePresence>
 
-      {/* Bottom Navigation Bar: Only show after onboarding (step > 1 or on plate tab) */}
-      {(step > 1 || activeTab === 'plate') && (
+      {/* Bottom Navigation Bar: Only show after user has successfully locked in their first profile */}
+      {hasLockedFirstProfile && (step > 1 || activeTab === 'plate') && (
         <nav
           aria-label="Bottom Navigation"
           className="fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4"
