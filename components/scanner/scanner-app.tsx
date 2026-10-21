@@ -1,74 +1,147 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ScanLine } from 'lucide-react'
+import { ScanLine, UtensilsCrossed } from 'lucide-react'
 import type { AgeGroup, AnalysisResult, Gender } from '@/lib/scanner'
+import { getTodayPlateItems } from '@/lib/storage'
 import { StepOnboarding } from './step-onboarding'
 import { StepUpload } from './step-upload'
 import { StepResults } from './step-results'
+import { DailyPlateDashboard } from './daily-plate-dashboard'
 
 type Step = 1 | 2 | 3
+type Tab = 'scanner' | 'plate'
 
 export function ScannerApp() {
+  const [activeTab, setActiveTab] = useState<Tab>('scanner')
   const [step, setStep] = useState<Step>(1)
   const [gender, setGender] = useState<Gender | ''>('')
   const [ageGroup, setAgeGroup] = useState<AgeGroup | ''>('')
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [plateCount, setPlateCount] = useState(0)
+
+  // Sync plate items count
+  const syncPlateCount = () => {
+    setPlateCount(getTodayPlateItems().length)
+  }
+
+  useEffect(() => {
+    syncPlateCount()
+  }, [])
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pb-12 pt-6">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pb-24 pt-6">
+      {/* Top App Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="toy-press flex size-11 items-center justify-center rounded-xl border-4 border-toy-ink bg-toy-yellow">
+          <span className="toy-press flex size-11 items-center justify-center rounded-xl border-4 border-toy-ink bg-toy-yellow shadow-[0_3px_0_0_var(--toy-ink)]">
             <ScanLine className="size-6 text-toy-ink" aria-hidden="true" />
           </span>
           <h1 className="font-display text-3xl font-bold text-white [text-shadow:0_3px_0_var(--toy-ink)]">
             LabelLens
           </h1>
         </div>
-        <StepDots step={step} />
+
+        {activeTab === 'scanner' && <StepDots step={step} />}
       </header>
 
+      {/* Main Tab Content */}
       <AnimatePresence mode="wait">
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, x: 40 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -40 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-        >
-          {step === 1 && (
-            <StepOnboarding
-              gender={gender}
-              ageGroup={ageGroup}
-              onGenderChange={setGender}
-              onAgeGroupChange={setAgeGroup}
-              onNext={() => setStep(2)}
-            />
-          )}
-          {step === 2 && gender && ageGroup && (
-            <StepUpload
-              gender={gender}
-              ageGroup={ageGroup}
-              onBack={() => setStep(1)}
-              onResult={(data) => {
-                setResult(data)
-                setStep(3)
-              }}
-            />
-          )}
-          {step === 3 && result && (
-            <StepResults
-              result={result}
-              onRestart={() => {
-                setResult(null)
-                setStep(2)
-              }}
-            />
-          )}
-        </motion.div>
+        {activeTab === 'plate' ? (
+          <motion.div
+            key="dashboard-tab"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+          >
+            <DailyPlateDashboard onNavigateToScan={() => setActiveTab('scanner')} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key={`step-${step}`}
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+          >
+            {step === 1 && (
+              <StepOnboarding
+                gender={gender}
+                ageGroup={ageGroup}
+                onGenderChange={setGender}
+                onAgeGroupChange={setAgeGroup}
+                onNext={() => setStep(2)}
+              />
+            )}
+            {step === 2 && gender && ageGroup && (
+              <StepUpload
+                gender={gender}
+                ageGroup={ageGroup}
+                onBack={() => setStep(1)}
+                onResult={(data) => {
+                  setResult(data)
+                  setStep(3)
+                }}
+              />
+            )}
+            {step === 3 && result && (
+              <StepResults
+                result={result}
+                onRestart={() => {
+                  setResult(null)
+                  setStep(2)
+                }}
+                onViewPlate={() => setActiveTab('plate')}
+                onPlateUpdated={syncPlateCount}
+              />
+            )}
+          </motion.div>
+        )}
       </AnimatePresence>
+
+      {/* Floating Bottom Navigation Bar */}
+      <nav
+        aria-label="Bottom Navigation"
+        className="fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4"
+      >
+        <div className="toy-block flex items-center justify-around border-3 bg-white/95 p-1.5 shadow-[0_4px_0_0_var(--toy-ink)] backdrop-blur-md">
+          <button
+            type="button"
+            onClick={() => setActiveTab('scanner')}
+            className={`font-display flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'scanner'
+                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                : 'text-toy-ink/65 hover:text-toy-ink'
+            }`}
+          >
+            <ScanLine className="size-4" strokeWidth={2.5} />
+            <span>Scanner</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              syncPlateCount()
+              setActiveTab('plate')
+            }}
+            className={`font-display relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'plate'
+                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                : 'text-toy-ink/65 hover:text-toy-ink'
+            }`}
+          >
+            <UtensilsCrossed className="size-4" strokeWidth={2.5} />
+            <span>Today&apos;s Plate</span>
+            {plateCount > 0 && (
+              <span className="flex size-5 items-center justify-center rounded-full border border-toy-ink bg-toy-red text-[10px] font-black text-white shadow-[0_1px_0_0_var(--toy-ink)]">
+                {plateCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </nav>
     </main>
   )
 }

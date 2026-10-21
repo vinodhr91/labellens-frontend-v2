@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { RotateCcw, Users } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Check, CheckCircle2, RotateCcw, Utensils, Users } from 'lucide-react'
 import { findMetric, toNumber, type AnalysisResult } from '@/lib/scanner'
+import { addProductToPlate } from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { VerdictStamp } from './verdict-stamp'
 import { SugarBottle } from './sugar-bottle'
@@ -19,7 +20,17 @@ function ratio(value: unknown, limit: unknown, unit: string) {
   return `${has(value) ? value : '—'}${unit} / ${has(limit) ? limit : '—'}${unit}`
 }
 
-export function StepResults({ result, onRestart }: { result: AnalysisResult; onRestart: () => void }) {
+export function StepResults({
+  result,
+  onRestart,
+  onViewPlate,
+  onPlateUpdated,
+}: {
+  result: AnalysisResult
+  onRestart: () => void
+  onViewPlate?: () => void
+  onPlateUpdated?: () => void
+}) {
   // Determine initial age mode based on scanned demographic
   const [ageMode, setAgeMode] = useState<'adult' | 'child'>(() => {
     const demo = (result.demographic || '').toLowerCase()
@@ -34,6 +45,10 @@ export function StepResults({ result, onRestart }: { result: AnalysisResult; onR
     }
     return 'adult'
   })
+
+  // State for Daily Plate action & Toast
+  const [addedToPlate, setAddedToPlate] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Raw nutrient values from analysis
   const rawSugar = findMetric(result.breakdown, ['sugar', 'sugars', 'total_sugar', 'added_sugar'])
@@ -78,11 +93,55 @@ export function StepResults({ result, onRestart }: { result: AnalysisResult; onR
   const dynamicVerdict =
     flags.length > 0 ? `⚠️ EXCEEDS DAILY LIMIT: ${flags.join(', ')}` : `✅ WITHIN DAILY LIMITS`
 
+  // Add to Today's Plate handler
+  const handleAddToPlate = () => {
+    const res = addProductToPlate({
+      product: result.product || 'Scanned Food Product',
+      serving_size: result.serving_size,
+      sugar_g: sugarGrams,
+      sat_fat_g: satFatGrams,
+      sodium_mg: sodiumMg,
+    })
+
+    if (res.success) {
+      setAddedToPlate(true)
+      setToastMessage(`🍽️ Added "${result.product || 'Item'}" to Today's Plate! (${res.totalItems} items logged)`)
+      if (onPlateUpdated) onPlateUpdated()
+      setTimeout(() => setToastMessage(null), 4000)
+    }
+  }
+
   return (
     <section className="flex flex-col gap-6" aria-labelledby="results-title">
       <h2 id="results-title" className="sr-only">
         Scan results
       </h2>
+
+      {/* Floating Success Toast */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-5 left-4 right-4 z-50 mx-auto max-w-sm rounded-2xl border-3 border-toy-ink bg-toy-green px-4 py-3 text-white shadow-xl flex items-center justify-between gap-2"
+          >
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-bold">
+              <CheckCircle2 className="size-5 shrink-0" />
+              <span>{toastMessage}</span>
+            </div>
+            {onViewPlate && (
+              <button
+                type="button"
+                onClick={onViewPlate}
+                className="font-display shrink-0 rounded-lg border-2 border-white bg-white/20 px-2.5 py-1 text-xs font-black text-white hover:bg-white hover:text-toy-green transition-colors cursor-pointer"
+              >
+                View Plate
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-col items-center gap-4">
         {/* Top Demographic Badge - Responsive & never cut off on mobile */}
@@ -154,21 +213,48 @@ export function StepResults({ result, onRestart }: { result: AnalysisResult; onR
         limitG={limits.sugar}
       />
 
-      {/* Saturated Fat & Sodium Test Tubes */}
+      {/* Saturated Fat Tube & Sodium Salt Shaker */}
       <div className="grid grid-cols-2 gap-4">
         <MiniMeter
           label="Saturated Fat"
+          shape="tube"
           percentage={satFatPct}
           delay={0.15}
           detail={ratio(satFatGrams, limits.satFat, 'g')}
         />
         <MiniMeter
           label="Sodium"
+          shape="salt"
           percentage={sodiumPct}
           delay={0.25}
           detail={ratio(sodiumMg, limits.sodium, 'mg')}
         />
       </div>
+
+      {/* 4. Add to Today's Plate Button */}
+      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+        <button
+          type="button"
+          onClick={handleAddToPlate}
+          className={`toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink py-4 text-lg font-bold shadow-[0_4px_0_0_var(--toy-ink)] transition-all cursor-pointer ${
+            addedToPlate
+              ? 'bg-toy-green text-white'
+              : 'bg-toy-yellow text-toy-ink hover:brightness-105'
+          }`}
+        >
+          {addedToPlate ? (
+            <>
+              <Check className="size-6 stroke-[3]" />
+              <span>Added to Today&apos;s Plate!</span>
+            </>
+          ) : (
+            <>
+              <Utensils className="size-6 stroke-[2.5]" />
+              <span>🍽️ Add to Today&apos;s Plate</span>
+            </>
+          )}
+        </button>
+      </motion.div>
 
       {result.other_nutrients && <NutrientsGrid nutrients={result.other_nutrients} />}
 

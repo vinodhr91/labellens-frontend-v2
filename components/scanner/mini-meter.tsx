@@ -9,11 +9,13 @@ export function MiniMeter({
   percentage,
   delay = 0,
   detail,
+  shape = 'tube',
 }: {
   label: string
   percentage: number
   delay?: number
   detail?: string
+  shape?: 'bottle' | 'tube' | 'salt'
 }) {
   const { fill } = levelColor(percentage)
   return (
@@ -24,7 +26,7 @@ export function MiniMeter({
       className="toy-block flex flex-col items-center gap-2 p-4"
     >
       <h3 className="text-lg font-bold text-toy-ink">{label}</h3>
-      <LiquidGauge percentage={percentage} shape="tube" label={label} className="h-32 w-auto" />
+      <LiquidGauge percentage={percentage} shape={shape} label={label} className="h-32 w-auto" />
       <span className="font-display text-3xl font-bold" style={{ color: fill }}>
         {Math.round(percentage)}%
       </span>
