@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ArrowRight, Lock, Plus, Sparkles, UserCheck, Users } from 'lucide-react'
+import { ChevronDown, ArrowRight, Lock, Plus, Sparkles, User, UserCheck, Users } from 'lucide-react'
 import Image from 'next/image'
 import { AGE_GROUPS, GENDERS, type AgeGroup, type Gender } from '@/lib/scanner'
 import {
   getStoredProfiles,
   saveStoredProfile,
-  type FamilyProfile,
+  setActiveProfileName,
+  type Profile,
 } from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { PaywallModal } from './paywall-modal'
@@ -42,37 +43,35 @@ export function StepOnboarding({
   onGenderChange,
   onAgeGroupChange,
   onNext,
+  onProfileChange,
 }: {
   gender: Gender | ''
   ageGroup: AgeGroup | ''
   onGenderChange: (g: Gender) => void
   onAgeGroupChange: (a: AgeGroup) => void
   onNext: () => void
+  onProfileChange?: (name: string) => void
 }) {
-  // Family Profiles state
-  const [profiles, setProfiles] = useState<FamilyProfile[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [profileName, setProfileName] = useState('My Son')
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null)
-  const [newProfileName, setNewProfileName] = useState('')
   const [showPaywall, setShowPaywall] = useState(false)
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null)
-
-  // Avatar cycling state
   const [cycleIndex, setCycleIndex] = useState(0)
 
-  // Load profiles from localStorage
+  // Load profiles from localStorage on mount
   useEffect(() => {
     const stored = getStoredProfiles()
     setProfiles(stored)
-    if (stored.length > 0 && !gender && !ageGroup) {
-      // Auto-select first saved profile if user hasn't made selections yet
-      const first = stored[0]
-      setActiveProfileId(first.id)
-      onGenderChange(first.gender)
-      onAgeGroupChange(first.ageGroup)
+    if (stored.length > 0) {
+      const active = stored[0]
+      setActiveProfileId(active.id)
+      setProfileName(active.name)
+      onGenderChange(active.gender as Gender)
+      onAgeGroupChange(active.age_group as AgeGroup)
+      if (onProfileChange) onProfileChange(active.name)
     }
   }, [])
 
-  // Both Gender and Age must be chosen to lock in
   const isLocked = Boolean(gender && ageGroup)
 
   // Autocycle through avatars every 1.6s when unlocked
@@ -91,54 +90,56 @@ export function StepOnboarding({
     ? lockedAvatar
     : { src: CYCLE_AVATARS[cycleIndex].src, alt: CYCLE_AVATARS[cycleIndex].label }
 
-  // Handle saving current profile
-  const handleSaveProfile = () => {
-    if (!gender || !ageGroup) {
-      alert('Please select both Gender and Age Group before saving a profile!')
-      return
-    }
-    const nameToSave = newProfileName.trim() || `${gender} (${AGE_LABELS[ageGroup]})`
-    const avatarSrc = lockedAvatar?.src || '/avatars/boy.png'
-
-    const result = saveStoredProfile({
-      name: nameToSave,
-      gender,
-      ageGroup,
-      avatar: avatarSrc,
-    })
-
-    if (result.paywall) {
-      setShowPaywall(true)
-    } else if (result.success && result.profile) {
-      setProfiles((prev) => [...prev, result.profile!])
-      setActiveProfileId(result.profile.id)
-      setNewProfileName('')
-      setSaveSuccessMsg(`Saved profile for "${nameToSave}"!`)
-      setTimeout(() => setSaveSuccessMsg(null), 3500)
-    }
-  }
-
-  // Handle click on "+ Add Profile"
+  // Handle clicking "+ Add Profile"
   const handleAddProfileClick = () => {
+    // If user already has 1 profile, trigger Freemium Paywall modal
     if (profiles.length >= 1) {
       setShowPaywall(true)
     } else {
       setActiveProfileId(null)
+      setProfileName('')
       onGenderChange('' as Gender)
       onAgeGroupChange('' as AgeGroup)
     }
   }
 
-  // Handle selecting an existing profile
-  const handleSelectProfile = (p: FamilyProfile) => {
+  // Handle selecting a saved profile
+  const handleSelectProfile = (p: Profile) => {
     setActiveProfileId(p.id)
-    onGenderChange(p.gender)
-    onAgeGroupChange(p.ageGroup)
+    setProfileName(p.name)
+    onGenderChange(p.gender as Gender)
+    onAgeGroupChange(p.age_group as AgeGroup)
+    setActiveProfileName(p.name)
+    if (onProfileChange) onProfileChange(p.name)
+  }
+
+  // Handle proceed to next step
+  const handleProceed = () => {
+    if (!gender || !ageGroup) return
+
+    const finalName = profileName.trim() || 'My Profile'
+
+    // If 0 profiles saved, save this one as the free profile
+    if (profiles.length === 0) {
+      const res = saveStoredProfile({
+        name: finalName,
+        gender,
+        age_group: ageGroup,
+      })
+      if (res.profile) {
+        setProfiles([res.profile])
+        setActiveProfileId(res.profile.id)
+      }
+    }
+
+    setActiveProfileName(finalName)
+    if (onProfileChange) onProfileChange(finalName)
+    onNext()
   }
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="onboarding-title">
-      {/* Freemium Family Profiles Bar */}
+      {/* 2. Profiles Bar & Paywall Trigger */}
       <div className="toy-block p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-toy-ink">
@@ -146,7 +147,7 @@ export function StepOnboarding({
             <h3 className="font-display text-sm font-bold uppercase tracking-wider">Family Profiles</h3>
           </div>
           <span className="font-display rounded-full border-2 border-toy-ink bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">
-            {profiles.length}/1 Free
+            {profiles.length}/1 Free Profile
           </span>
         </div>
 
@@ -158,7 +159,7 @@ export function StepOnboarding({
                 key={p.id}
                 type="button"
                 onClick={() => handleSelectProfile(p)}
-                className={`font-display inline-flex cursor-pointer items-center gap-1.5 rounded-full border-3 border-toy-ink px-3 py-1 text-sm font-bold transition-transform hover:scale-105 active:scale-95 ${
+                className={`font-display inline-flex cursor-pointer items-center gap-1.5 rounded-full border-3 border-toy-ink px-3.5 py-1 text-sm font-bold transition-transform hover:scale-105 active:scale-95 ${
                   isSelected
                     ? 'bg-toy-yellow text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)]'
                     : 'bg-white text-toy-ink/75 hover:bg-muted'
@@ -182,47 +183,39 @@ export function StepOnboarding({
             )}
           </button>
         </div>
-
-        {/* Save profile input (when user has 0 saved profiles or is creating their free one) */}
-        {profiles.length === 0 && (
-          <div className="mt-3 flex items-center gap-2 border-t-2 border-toy-ink/10 pt-3">
-            <input
-              type="text"
-              placeholder="Profile nickname (e.g. My Son)"
-              value={newProfileName}
-              onChange={(e) => setNewProfileName(e.target.value)}
-              className="font-display flex-1 rounded-xl border-2 border-toy-ink bg-[#f8fbff] px-3 py-1.5 text-sm font-semibold text-toy-ink focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={handleSaveProfile}
-              disabled={!isLocked}
-              className="font-display cursor-pointer rounded-xl border-2 border-toy-ink bg-toy-yellow px-3 py-1.5 text-xs font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] hover:brightness-105 disabled:opacity-40"
-            >
-              Save Profile
-            </button>
-          </div>
-        )}
-
-        {saveSuccessMsg && (
-          <p className="mt-2 text-center text-xs font-bold text-toy-green animate-pulse">
-            ✓ {saveSuccessMsg}
-          </p>
-        )}
       </div>
 
       {/* Main Selection & Swipe-to-Lock Avatar Card */}
-      <div className="toy-block flex flex-col items-center gap-5 p-5 text-center">
+      <div className="toy-block flex flex-col items-center gap-4 p-5 text-center">
         <div>
           <h2 id="onboarding-title" className="text-2xl font-bold text-toy-ink text-balance">
             {"Who's eating this snack?"}
           </h2>
           <p className="text-sm font-semibold text-muted-foreground text-pretty mt-0.5">
-            Select age and gender to lock in their personalized limits.
+            Set a profile name and lock in their personalized limits.
           </p>
         </div>
 
-        {/* 1. Gender and Age Dropdowns MOVED TO THE TOP of the card */}
+        {/* Profile Name Input */}
+        <div className="w-full flex flex-col gap-1 text-left">
+          <label htmlFor="profile-name-input" className="font-display text-sm font-bold text-toy-ink flex items-center gap-1.5">
+            <User className="size-3.5" />
+            <span>Profile Name</span>
+          </label>
+          <input
+            id="profile-name-input"
+            type="text"
+            value={profileName}
+            onChange={(e) => {
+              setProfileName(e.target.value)
+              if (onProfileChange) onProfileChange(e.target.value)
+            }}
+            placeholder="e.g., My Son"
+            className="font-display w-full rounded-xl border-3 border-toy-ink bg-[#f8fbff] px-3.5 py-2.5 text-sm font-bold text-toy-ink focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-toy-yellow shadow-[0_2px_0_0_var(--toy-ink)]"
+          />
+        </div>
+
+        {/* Dropdowns at the TOP */}
         <div className="grid w-full grid-cols-2 gap-3">
           <ToySelect
             id="gender"
@@ -230,10 +223,7 @@ export function StepOnboarding({
             value={gender}
             placeholder="Gender"
             options={GENDERS.map((g) => ({ value: g, label: g }))}
-            onChange={(v) => {
-              setActiveProfileId(null)
-              onGenderChange(v as Gender)
-            }}
+            onChange={(v) => onGenderChange(v as Gender)}
           />
           <ToySelect
             id="age"
@@ -241,15 +231,12 @@ export function StepOnboarding({
             value={ageGroup}
             placeholder="Age"
             options={AGE_GROUPS.map((a) => ({ value: a, label: AGE_LABELS[a] }))}
-            onChange={(v) => {
-              setActiveProfileId(null)
-              onAgeGroupChange(v as AgeGroup)
-            }}
+            onChange={(v) => onAgeGroupChange(v as AgeGroup)}
           />
         </div>
 
-        {/* 2. Below Dropdowns: Large Circle with Swipe-to-Lock Avatar */}
-        <div className="flex flex-col items-center gap-2">
+        {/* Below Dropdowns: Large Circle with Swipe-to-Lock Avatar */}
+        <div className="flex flex-col items-center gap-2 pt-1">
           <div className="relative flex size-48 items-center justify-center rounded-full border-4 border-toy-ink bg-gradient-to-b from-toy-yellow to-[#ffe98a] shadow-[0_6px_0_0_var(--toy-ink)]">
             <AnimatePresence mode="wait">
               {currentAvatar && (
@@ -291,16 +278,15 @@ export function StepOnboarding({
             )}
           </div>
 
-          {/* Subtitle / Cycling Cue */}
           <div className="min-h-6 pt-1">
             {isLocked ? (
               <p className="font-display text-base font-bold text-toy-ink">
-                Ready for {gender} · {ageGroup && AGE_LABELS[ageGroup]}!
+                Ready for {profileName ? `${profileName} · ` : ''}{gender} ({ageGroup && AGE_LABELS[ageGroup]})!
               </p>
             ) : (
               <p className="font-display flex items-center justify-center gap-1.5 text-xs font-bold text-toy-ink/70">
                 <Sparkles className="size-3.5 text-toy-orange animate-spin" />
-                <span>Cycling avatars... Pick gender & age above to lock in!</span>
+                <span>Cycling avatars... Select gender & age to lock in!</span>
               </p>
             )}
           </div>
@@ -308,7 +294,7 @@ export function StepOnboarding({
       </div>
 
       {/* Next Step Button */}
-      <ToyButton onClick={onNext} disabled={!isLocked} className="w-full py-4 text-xl">
+      <ToyButton onClick={handleProceed} disabled={!isLocked} className="w-full py-4 text-xl">
         Next: Scan Food Label
         <ArrowRight className="size-6" strokeWidth={3} aria-hidden="true" />
       </ToyButton>

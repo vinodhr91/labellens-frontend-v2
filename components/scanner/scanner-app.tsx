@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ScanLine, UtensilsCrossed } from 'lucide-react'
+import { Camera, ScanLine, UtensilsCrossed } from 'lucide-react'
 import type { AgeGroup, AnalysisResult, Gender } from '@/lib/scanner'
-import { getTodayPlateItems } from '@/lib/storage'
+import { getActiveProfileName, getTodayPlateItems } from '@/lib/storage'
 import { StepOnboarding } from './step-onboarding'
 import { StepUpload } from './step-upload'
 import { StepResults } from './step-results'
@@ -19,19 +19,22 @@ export function ScannerApp() {
   const [gender, setGender] = useState<Gender | ''>('')
   const [ageGroup, setAgeGroup] = useState<AgeGroup | ''>('')
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [profileName, setProfileName] = useState<string>('My Son')
   const [plateCount, setPlateCount] = useState(0)
 
-  // Sync plate items count
-  const syncPlateCount = () => {
-    setPlateCount(getTodayPlateItems().length)
+  // Sync active profile and plate items count
+  const syncData = () => {
+    const currentName = getActiveProfileName()
+    setProfileName(currentName)
+    setPlateCount(getTodayPlateItems(currentName).length)
   }
 
   useEffect(() => {
-    syncPlateCount()
+    syncData()
   }, [])
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pb-24 pt-6">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pb-28 pt-6">
       {/* Top App Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -46,7 +49,7 @@ export function ScannerApp() {
         {activeTab === 'scanner' && <StepDots step={step} />}
       </header>
 
-      {/* Main Tab Content */}
+      {/* Main Content Area */}
       <AnimatePresence mode="wait">
         {activeTab === 'plate' ? (
           <motion.div
@@ -56,7 +59,10 @@ export function ScannerApp() {
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 280, damping: 24 }}
           >
-            <DailyPlateDashboard onNavigateToScan={() => setActiveTab('scanner')} />
+            <DailyPlateDashboard
+              profileName={profileName}
+              onNavigateToScan={() => setActiveTab('scanner')}
+            />
           </motion.div>
         ) : (
           <motion.div
@@ -72,6 +78,10 @@ export function ScannerApp() {
                 ageGroup={ageGroup}
                 onGenderChange={setGender}
                 onAgeGroupChange={setAgeGroup}
+                onProfileChange={(name) => {
+                  setProfileName(name)
+                  setPlateCount(getTodayPlateItems(name).length)
+                }}
                 onNext={() => setStep(2)}
               />
             )}
@@ -89,19 +99,23 @@ export function ScannerApp() {
             {step === 3 && result && (
               <StepResults
                 result={result}
+                profileName={profileName}
                 onRestart={() => {
                   setResult(null)
                   setStep(2)
                 }}
-                onViewPlate={() => setActiveTab('plate')}
-                onPlateUpdated={syncPlateCount}
+                onViewPlate={() => {
+                  syncData()
+                  setActiveTab('plate')
+                }}
+                onPlateUpdated={syncData}
               />
             )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Floating Bottom Navigation Bar */}
+      {/* 3. Bottom Navigation Bar with two tabs: [ 📷 Scan ] and [ 🍽️ Today's Plate ] */}
       <nav
         aria-label="Bottom Navigation"
         className="fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4"
@@ -116,14 +130,14 @@ export function ScannerApp() {
                 : 'text-toy-ink/65 hover:text-toy-ink'
             }`}
           >
-            <ScanLine className="size-4" strokeWidth={2.5} />
-            <span>Scanner</span>
+            <Camera className="size-4 stroke-[2.5]" />
+            <span>📷 Scan</span>
           </button>
 
           <button
             type="button"
             onClick={() => {
-              syncPlateCount()
+              syncData()
               setActiveTab('plate')
             }}
             className={`font-display relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
@@ -132,8 +146,8 @@ export function ScannerApp() {
                 : 'text-toy-ink/65 hover:text-toy-ink'
             }`}
           >
-            <UtensilsCrossed className="size-4" strokeWidth={2.5} />
-            <span>Today&apos;s Plate</span>
+            <UtensilsCrossed className="size-4 stroke-[2.5]" />
+            <span>🍽️ Today&apos;s Plate</span>
             {plateCount > 0 && (
               <span className="flex size-5 items-center justify-center rounded-full border border-toy-ink bg-toy-red text-[10px] font-black text-white shadow-[0_1px_0_0_var(--toy-ink)]">
                 {plateCount}

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, CheckCircle2, RotateCcw, Utensils, Users } from 'lucide-react'
 import { findMetric, toNumber, type AnalysisResult } from '@/lib/scanner'
-import { addProductToPlate } from '@/lib/storage'
+import { addProductToProfilePlate, getActiveProfileName } from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { VerdictStamp } from './verdict-stamp'
 import { SugarBottle } from './sugar-bottle'
@@ -22,15 +22,19 @@ function ratio(value: unknown, limit: unknown, unit: string) {
 
 export function StepResults({
   result,
+  profileName: initialProfileName,
   onRestart,
   onViewPlate,
   onPlateUpdated,
 }: {
   result: AnalysisResult
+  profileName?: string
   onRestart: () => void
   onViewPlate?: () => void
   onPlateUpdated?: () => void
 }) {
+  const profileName = initialProfileName || getActiveProfileName()
+
   // Determine initial age mode based on scanned demographic
   const [ageMode, setAgeMode] = useState<'adult' | 'child'>(() => {
     const demo = (result.demographic || '').toLowerCase()
@@ -93,9 +97,9 @@ export function StepResults({
   const dynamicVerdict =
     flags.length > 0 ? `⚠️ EXCEEDS DAILY LIMIT: ${flags.join(', ')}` : `✅ WITHIN DAILY LIMITS`
 
-  // Add to Today's Plate handler
+  // Add to Profile's Plate handler
   const handleAddToPlate = () => {
-    const res = addProductToPlate({
+    const res = addProductToProfilePlate(profileName, {
       product: result.product || 'Scanned Food Product',
       serving_size: result.serving_size,
       sugar_g: sugarGrams,
@@ -105,7 +109,7 @@ export function StepResults({
 
     if (res.success) {
       setAddedToPlate(true)
-      setToastMessage(`🍽️ Added "${result.product || 'Item'}" to Today's Plate! (${res.totalItems} items logged)`)
+      setToastMessage(`🍽️ Added to ${profileName}'s Plate! (${res.totalItems} items today)`)
       if (onPlateUpdated) onPlateUpdated()
       setTimeout(() => setToastMessage(null), 4000)
     }
@@ -231,7 +235,7 @@ export function StepResults({
         />
       </div>
 
-      {/* 4. Add to Today's Plate Button */}
+      {/* 3. Add to [Profile Name]'s Plate Button */}
       <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
         <button
           type="button"
@@ -245,12 +249,12 @@ export function StepResults({
           {addedToPlate ? (
             <>
               <Check className="size-6 stroke-[3]" />
-              <span>Added to Today&apos;s Plate!</span>
+              <span>Added to {profileName}&apos;s Plate!</span>
             </>
           ) : (
             <>
               <Utensils className="size-6 stroke-[2.5]" />
-              <span>🍽️ Add to Today&apos;s Plate</span>
+              <span>🍽️ Add to {profileName}&apos;s Plate</span>
             </>
           )}
         </button>
@@ -261,6 +265,7 @@ export function StepResults({
       {/* Clickable Hidden Ingredients with Explanations and Google News search */}
       <HiddenIngredients hidden={result.hidden_ingredients} raw={result.raw_ingredients} />
 
+      {/* Pixar-style Scientific Sources Modal */}
       {result.citations && result.citations.length > 0 && <Citations citations={result.citations} />}
 
       <Feedback />

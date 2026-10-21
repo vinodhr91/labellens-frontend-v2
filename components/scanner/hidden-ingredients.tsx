@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, ExternalLink, Newspaper, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ExternalLink, Search, X } from 'lucide-react'
 import {
   extractHiddenIngredients,
   HIDDEN_INGREDIENTS_DB,
@@ -165,14 +165,14 @@ export function HiddenIngredients({
 
               <div className="mt-5 flex flex-col gap-2.5">
                 <a
-                  href={`https://news.google.com/search?q=${encodeURIComponent(selected.name + ' health risks food')}`}
+                  href={`https://news.google.com/search?q=health+effects+of+${encodeURIComponent(selected.name)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="toy-press font-display flex items-center justify-center gap-2 rounded-xl border-3 border-toy-ink bg-toy-yellow px-4 py-2.5 text-sm font-bold text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)] transition-transform hover:brightness-105"
+                  className="toy-press font-display flex items-center justify-center gap-2 rounded-xl border-3 border-toy-ink bg-toy-yellow px-4 py-2.5 text-sm font-bold text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)] transition-transform hover:brightness-105 cursor-pointer"
                 >
-                  <Newspaper className="size-4 shrink-0" strokeWidth={2.5} />
-                  <span>Search Google News</span>
-                  <ExternalLink className="size-3.5 shrink-0" strokeWidth={2.5} />
+                  <Search className="size-4 shrink-0 stroke-[2.5]" />
+                  <span>🔍 Read Latest News</span>
+                  <ExternalLink className="size-3.5 shrink-0 stroke-[2.5]" />
                 </a>
 
                 <button

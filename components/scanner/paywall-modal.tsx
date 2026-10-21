@@ -47,11 +47,11 @@ export function PaywallModal({
             Upgrade to LabelLens Pro
           </h3>
           <p className="mt-1 text-sm font-semibold text-muted-foreground text-pretty">
-            Upgrade to LabelLens Pro to track multiple family members and unlock personalized nutrition limits.
+            Upgrade to LabelLens Pro to track multiple family members.
           </p>
 
           <div className="mt-5 w-full rounded-2xl border-3 border-toy-ink bg-[#fef7ee] p-4 text-left">
-            <p className="text-xs font-bold uppercase tracking-wider text-toy-orange">Pro Family Benefits:</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-toy-orange">Pro Family Features:</p>
             <ul className="mt-2.5 flex flex-col gap-2 text-sm font-bold text-toy-ink">
               <li className="flex items-center gap-2">
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-toy-green text-white">
@@ -69,7 +69,7 @@ export function PaywallModal({
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-toy-green text-white">
                   <Check className="size-3.5" strokeWidth={3} />
                 </span>
-                <span>Combined Daily Plate family history</span>
+                <span>Individual Daily Plate tracking per member</span>
               </li>
             </ul>
           </div>
@@ -78,13 +78,13 @@ export function PaywallModal({
             <button
               type="button"
               onClick={() => {
-                alert('🎉 Pro checkout demo! Pro tier unlocked for your testing session.')
+                alert('🎉 Mock Upgrade triggered! In production, this opens Stripe / App Store subscription.')
                 onClose()
               }}
               className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-2xl border-4 border-toy-ink bg-toy-yellow py-3.5 text-base font-bold text-toy-ink shadow-[0_4px_0_0_var(--toy-ink)] hover:brightness-105 cursor-pointer"
             >
               <Crown className="size-5" />
-              <span>Unlock LabelLens Pro · ₹199/mo</span>
+              <span>Upgrade to Pro</span>
             </button>
 
             <button

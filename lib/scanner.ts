@@ -18,11 +18,12 @@ export type Metric = {
 export type Citation =
   | string
   | {
-      source?: string
       name?: string
+      explanation?: string
+      url?: string
+      source?: string
       title?: string
       description?: string
-      url?: string
       link?: string
       plain_english?: string
     }
