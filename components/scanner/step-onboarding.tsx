@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, ArrowRight, Lock, Plus, User, UserCheck, Users } from 'lucide-react'
 import Image from 'next/image'
-import { AGE_GROUPS, GENDERS, type AgeGroup, type Gender } from '@/lib/scanner'
+import { AGE_GROUPS, GENDERS, isFemaleGender, type AgeGroup, type Gender } from '@/lib/scanner'
 import {
   getStoredProfiles,
   saveStoredProfile,
@@ -14,27 +14,35 @@ import {
 import { ToyButton } from './toy-button'
 import { PaywallModal } from './paywall-modal'
 
-const AGE_LABELS: Record<AgeGroup, string> = {
-  'under-2': 'Under 2',
+const AGE_LABELS: Record<string, string> = {
   '1-3': '1 – 3 years',
   '4-6': '4 – 6 years',
   '7-9': '7 – 9 years',
   '10+': '10+ years',
+  'under-2': 'Under 2 years',
 }
 
 const CYCLE_AVATARS = [
-  { gender: 'Boy' as Gender, src: '/avatars/boy.png', label: 'Boy' },
-  { gender: 'Girl' as Gender, src: '/avatars/girl.png', label: 'Girl' },
-  { gender: 'Man' as Gender, src: '/avatars/man.png', label: 'Man' },
-  { gender: 'Woman' as Gender, src: '/avatars/woman.png', label: 'Woman' },
+  { src: '/avatars/boy.png', label: 'Boy' },
+  { src: '/avatars/girl.png', label: 'Girl' },
+  { src: '/avatars/man.png', label: 'Man' },
+  { src: '/avatars/woman.png', label: 'Woman' },
 ]
 
 function lockedAvatarFor(gender: Gender | '', age: AgeGroup | '') {
-  if (age === 'under-2' || age === '1-3') {
-    return { src: '/avatars/baby.png', alt: 'Cartoon baby avatar' }
-  }
   if (!gender) return null
-  return { src: `/avatars/${gender.toLowerCase()}.png`, alt: `Cartoon ${gender.toLowerCase()} avatar` }
+  const female = isFemaleGender(gender)
+  const isAdult = age === '10+'
+
+  if (female) {
+    return isAdult
+      ? { src: '/avatars/woman.png', alt: 'Cartoon woman avatar' }
+      : { src: '/avatars/girl.png', alt: 'Cartoon girl avatar' }
+  } else {
+    return isAdult
+      ? { src: '/avatars/man.png', alt: 'Cartoon man avatar' }
+      : { src: '/avatars/boy.png', alt: 'Cartoon boy avatar' }
+  }
 }
 
 export function StepOnboarding({
@@ -97,13 +105,32 @@ export function StepOnboarding({
   const handleAddProfileClick = () => {
     if (!isLocked) return
 
-    // If user already has 1 profile, trigger Freemium Paywall modal
+    // If user already has 1 or more profiles saved, trigger Freemium Paywall modal
     if (profiles.length >= 1) {
       setShowPaywall(true)
       return
     }
 
-    // Reset all form fields to empty and restart avatar cycling animation
+    // BUG-15: Save current profile {name, gender, age} to localStorage before form clears
+    const finalName = profileName.trim() || 'My Profile'
+    const res = saveStoredProfile({
+      name: finalName,
+      gender,
+      age_group: ageGroup,
+    })
+
+    if (res.paywall) {
+      setShowPaywall(true)
+      return
+    }
+
+    if (res.profile) {
+      const updated = getStoredProfiles()
+      setProfiles(updated)
+      setActiveProfileName(res.profile.name)
+    }
+
+    // Reset all form fields to empty and restart avatar cycling animation for next profile
     setActiveProfileId(null)
     setProfileName('')
     onGenderChange('' as Gender)
@@ -137,6 +164,17 @@ export function StepOnboarding({
       if (res.profile) {
         setProfiles([res.profile])
         setActiveProfileId(res.profile.id)
+      }
+    } else if (!activeProfileId) {
+      // Trying to proceed with a second unsaved profile
+      const res = saveStoredProfile({
+        name: finalName,
+        gender,
+        age_group: ageGroup,
+      })
+      if (res.paywall) {
+        setShowPaywall(true)
+        return
       }
     }
 

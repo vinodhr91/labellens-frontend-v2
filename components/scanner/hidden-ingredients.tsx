@@ -41,17 +41,26 @@ export function HiddenIngredients({
               'A processed additive or sweetener used to enhance taste or texture. Excess intake is linked to metabolic strain.',
           })
         }
-      } else if (h && typeof h === 'object' && h.name) {
-        const lower = h.name.toLowerCase().trim()
-        if (!seen.has(lower)) {
-          seen.add(lower)
-          items.push({
-            name: h.name,
-            meaning:
-              h.meaning ||
+      } else if (h && typeof h === 'object') {
+        const itemObj = h as Record<string, unknown>
+        const name = String(itemObj.name || itemObj.ingredient || itemObj.title || '').trim()
+        if (name) {
+          const lower = name.toLowerCase()
+          if (!seen.has(lower)) {
+            seen.add(lower)
+            // BUG-17: Correctly display the meaning text from the hidden_ingredients JSON array
+            const meaningText =
+              (typeof itemObj.meaning === 'string' && itemObj.meaning.trim()) ||
+              (typeof itemObj.explanation === 'string' && itemObj.explanation.trim()) ||
+              (typeof itemObj.description === 'string' && itemObj.description.trim()) ||
               HIDDEN_INGREDIENTS_DB[lower] ||
-              'A processed additive or sweetener used to enhance taste or texture. Excess intake is linked to metabolic strain.',
-          })
+              'A processed additive or sweetener used to enhance taste or texture. Excess intake is linked to metabolic strain.'
+
+            items.push({
+              name,
+              meaning: meaningText,
+            })
+          }
         }
       }
     }
@@ -156,7 +165,7 @@ export function HiddenIngredients({
 
               <div className="mt-4 rounded-xl border-2 border-toy-ink/20 bg-[#fff9ed] p-3.5">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-toy-orange">
-                  Plain-English Explanation
+                  Meaning & Health Impact
                 </p>
                 <p className="mt-1.5 text-sm font-semibold leading-relaxed text-toy-ink">
                   {selected.meaning}

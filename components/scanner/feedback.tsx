@@ -146,13 +146,13 @@ function FeedbackModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
           <AnimatePresence>
             {selectedReason === 'Other' && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.2 }}
-                className="overflow-hidden"
+                className="pt-1"
               >
-                <div className="flex flex-col gap-1 pt-1">
+                <div className="flex flex-col gap-1">
                   <label htmlFor="other-detail-input" className="text-xs font-bold text-toy-ink uppercase tracking-wider">
                     Specify your issue:
                   </label>

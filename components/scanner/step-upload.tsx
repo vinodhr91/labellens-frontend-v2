@@ -11,6 +11,7 @@ import { UploadBox, type PickedImage } from './upload-box'
 type Layout = 'same' | 'separate' | null
 
 const HEALTH_FACTS = [
+  'Why track only Sugar, Fat, and Sodium? Because WHO/ICMR identifies these as the Big 3 hidden dangers in ultra-processed foods.',
   'Some major brands use cheaper oils in Indian products compared to their European versions.',
   'Food companies use over 40 different names for sugar (like Maltodextrin and Invert Syrup) to hide it.',
   'The average Indian consumes 2x the recommended daily sugar limit.',
@@ -58,13 +59,13 @@ export function StepUpload({
   const [shuffledFacts, setShuffledFacts] = useState<string[]>(() => shuffleFacts(HEALTH_FACTS))
   const [factIndex, setFactIndex] = useState(0)
 
-  // Carousel timer: every 2.5 seconds smoothly advance to the next fact
+  // BUG-16: Carousel timer slowed to 3.5 seconds so users can easily read each fact
   useEffect(() => {
     if (!loading || shuffledFacts.length === 0) return
 
     const interval = setInterval(() => {
       setFactIndex((prev) => (prev + 1) % shuffledFacts.length)
-    }, 2500)
+    }, 3500)
 
     return () => clearInterval(interval)
   }, [loading, shuffledFacts])
@@ -165,62 +166,74 @@ export function StepUpload({
         </div>
       )}
 
-      <div className="flex gap-3">
-        <ToyButton variant="white" onClick={onBack} aria-label="Back" className="px-4" disabled={loading}>
-          <ArrowLeft className="size-7" strokeWidth={3} aria-hidden="true" />
-        </ToyButton>
-        <ToyButton onClick={handleScan} disabled={!canScan} className="flex-1 py-5 text-2xl">
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <ScanLine className="size-7 animate-pulse" strokeWidth={3} aria-hidden="true" />
-              Scanning…
-            </span>
-          ) : (
-            <>
-              <ScanLine className="size-7" strokeWidth={3} aria-hidden="true" />
-              Scan
-            </>
+      {/* BUG-16: Unified Scan Action & Loading Carousel Container */}
+      <div className="flex flex-col gap-3">
+        <div className="flex gap-3">
+          <ToyButton variant="white" onClick={onBack} aria-label="Back" className="px-4" disabled={loading}>
+            <ArrowLeft className="size-7" strokeWidth={3} aria-hidden="true" />
+          </ToyButton>
+          <ToyButton onClick={handleScan} disabled={!canScan} className="flex-1 py-5 text-2xl">
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <ScanLine className="size-7 animate-pulse" strokeWidth={3} aria-hidden="true" />
+                Scanning…
+              </span>
+            ) : (
+              <>
+                <ScanLine className="size-7" strokeWidth={3} aria-hidden="true" />
+                Scan
+              </>
+            )}
+          </ToyButton>
+        </div>
+
+        {/* Loading Carousel: Positioned right under the scanning animation */}
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+              className="toy-block bg-toy-yellow/20 border-4 border-toy-ink p-4 flex flex-col items-center gap-2.5 text-center shadow-[0_4px_0_0_var(--toy-ink)]"
+              aria-live="polite"
+            >
+              <div className="flex items-center gap-2">
+                <span className="relative flex size-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-toy-orange opacity-75"></span>
+                  <span className="relative inline-flex rounded-full size-2.5 bg-toy-orange"></span>
+                </span>
+                <span className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink/80">
+                  Scanning Food Label…
+                </span>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 rounded-full border-2 border-toy-ink bg-toy-yellow px-3 py-0.5 text-xs font-black uppercase tracking-wider text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]">
+                <span>💡</span> Did You Know?
+              </div>
+
+              <div className="relative min-h-[85px] w-full flex items-center justify-center overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={factIndex}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.45, ease: 'easeInOut' }}
+                    className="font-display text-base sm:text-lg font-bold text-toy-ink leading-snug px-2"
+                  >
+                    &ldquo;{shuffledFacts[factIndex]}&rdquo;
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+
+              <p className="text-[11px] font-semibold text-toy-ink/70">
+                The first scan can take up to a minute while the cloud server wakes up.
+              </p>
+            </motion.div>
           )}
-        </ToyButton>
+        </AnimatePresence>
       </div>
-
-      {/* Randomized "Did You Know?" loading carousel */}
-      <AnimatePresence>
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0, y: 15, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -15, scale: 0.96 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="toy-block bg-toy-yellow/20 border-4 border-toy-ink p-5 flex flex-col items-center gap-3 text-center"
-            aria-live="polite"
-          >
-            <div className="inline-flex items-center gap-2 rounded-full border-2 border-toy-ink bg-toy-yellow px-3 py-1 text-xs font-black uppercase tracking-wider text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]">
-              <span>💡</span> Did You Know?
-            </div>
-
-            <div className="relative min-h-[85px] w-full flex items-center justify-center overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={factIndex}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.35, ease: 'easeInOut' }}
-                  className="font-display text-base sm:text-lg font-bold text-toy-ink leading-snug px-2"
-                >
-                  &ldquo;{shuffledFacts[factIndex]}&rdquo;
-                </motion.p>
-              </AnimatePresence>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1 text-xs font-bold text-toy-ink/75">
-              <span className="size-2 rounded-full bg-toy-ink animate-ping" />
-              <span>Reading your food label… the first scan can take up to a minute!</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </section>
   )
 }

@@ -1,10 +1,15 @@
 export const API_URL = 'https://labellens-api-cztz.onrender.com/api/analyze'
 
-export const GENDERS = ['Boy', 'Girl', 'Man', 'Woman'] as const
-export const AGE_GROUPS = ['under-2', '1-3', '4-6', '7-9', '10+'] as const
+export const GENDERS = ['Female', 'Male'] as const
+export const AGE_GROUPS = ['1-3', '4-6', '7-9', '10+', 'under-2'] as const
 
-export type Gender = (typeof GENDERS)[number]
+export type Gender = (typeof GENDERS)[number] | 'Boy' | 'Girl' | 'Man' | 'Woman'
 export type AgeGroup = (typeof AGE_GROUPS)[number]
+
+export function isFemaleGender(g: string): boolean {
+  const s = (g || '').toLowerCase().trim()
+  return s === 'female' || s === 'girl' || s === 'woman'
+}
 
 export type Metric = {
   percentage?: number | string
@@ -31,6 +36,8 @@ export type Citation =
 export type HiddenIngredientItem = {
   name: string
   meaning?: string
+  explanation?: string
+  description?: string
 }
 
 export type AnalysisResult = {

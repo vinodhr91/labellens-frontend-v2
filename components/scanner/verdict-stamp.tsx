@@ -4,8 +4,8 @@ import { motion } from 'framer-motion'
 
 function stampColor(verdict: string) {
   const v = verdict.toLowerCase()
-  if (/(exceed|high|danger|avoid|over|❌|🚫|🔴)/.test(v)) return 'var(--toy-red)'
-  if (/(moderate|caution|close|near|medium|⚠)/.test(v)) return 'var(--toy-orange)'
+  if (/(exceed|high|danger|avoid|over|❌|🚫|🔴|🚨)/.test(v)) return 'var(--toy-red)'
+  if (/(moderate|caution|close|near|medium|⚠|⚠️)/.test(v)) return 'var(--toy-orange)'
   return 'var(--toy-green)'
 }
 

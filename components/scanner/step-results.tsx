@@ -20,6 +20,18 @@ function ratio(value: unknown, limit: unknown, unit: string) {
   return `${has(value) ? value : '—'}${unit} / ${has(limit) ? limit : '—'}${unit}`
 }
 
+export type AgeBracket = '1-3' | '4-6' | '7-9' | '10+'
+
+const AGE_BRACKET_CONFIG: Record<
+  AgeBracket,
+  { sugar: number; satFat: number; sodium: number; label: string; name: string }
+> = {
+  '1-3': { sugar: 27, satFat: 12, sodium: 800, label: 'Age 1–3', name: 'Toddler (1–3)' },
+  '4-6': { sugar: 34, satFat: 15, sodium: 1000, label: 'Age 4–6', name: 'Child (4–6)' },
+  '7-9': { sugar: 42, satFat: 18, sodium: 1200, label: 'Age 7–9', name: 'Child (7–9)' },
+  '10+': { sugar: 50, satFat: 22, sodium: 2000, label: 'Age 10 and over', name: 'Adult (10+)' },
+}
+
 export function StepResults({
   result,
   profileName: initialProfileName,
@@ -36,39 +48,30 @@ export function StepResults({
   const profileName = initialProfileName || getActiveProfileName()
   const activeProfile = getActiveProfile()
 
-  // Determine initial age mode based on scanned demographic or active profile
-  const [ageMode, setAgeMode] = useState<'adult' | 'child'>(() => {
-    if (activeProfile?.age_group) {
-      return activeProfile.age_group === '10+' ? 'adult' : 'child'
-    }
+  // Category of the active profile (1-3, 4-6, 7-9, 10+)
+  const profileAgeBracket: AgeBracket = (() => {
+    const raw = (activeProfile?.age_group || '').toLowerCase()
+    if (raw.includes('1-3') || raw.includes('under')) return '1-3'
+    if (raw.includes('4-6')) return '4-6'
+    if (raw.includes('7-9')) return '7-9'
+    if (raw.includes('10')) return '10+'
     const demo = (result.demographic || '').toLowerCase()
-    if (
-      demo.includes('1-3') ||
-      demo.includes('4-6') ||
-      demo.includes('7-9') ||
-      demo.includes('under') ||
-      demo.includes('child')
-    ) {
-      return 'child'
-    }
-    return 'adult'
-  })
-
-  // Category of the active profile
-  const profileAgeCategory = (() => {
-    if (activeProfile?.age_group) {
-      return activeProfile.age_group === '10+' ? 'adult' : 'child'
-    }
-    const demo = (result.demographic || '').toLowerCase()
-    return demo.includes('1-3') || demo.includes('4-6') || demo.includes('7-9') || demo.includes('under') || demo.includes('child')
-      ? 'child'
-      : 'adult'
+    if (demo.includes('1-3') || demo.includes('under')) return '1-3'
+    if (demo.includes('4-6')) return '4-6'
+    if (demo.includes('7-9')) return '7-9'
+    return '10+'
   })()
 
-  // Badge text: Show active profile name, or '(What-If)' if age toggle is flipped to a different group
-  const isWhatIf = ageMode !== profileAgeCategory
+  // BUG-19: 4-Way Selector for exact age brackets (1-3, 4-6, 7-9, 10+)
+  const [selectedAgeBracket, setSelectedAgeBracket] = useState<AgeBracket>(profileAgeBracket)
+
+  // Standard RDA limits for selected bracket (from ICMR-NIN / WHO / FSSAI)
+  const limits = AGE_BRACKET_CONFIG[selectedAgeBracket]
+
+  // Badge text: Show active profile name, or '(What-If)' if age toggle is flipped to a different bracket
+  const isWhatIf = selectedAgeBracket !== profileAgeBracket
   const badgeText = isWhatIf
-    ? `Breakdown for: ${ageMode === 'adult' ? 'Adult' : 'Child'} (What-If)`
+    ? `Breakdown for: ${limits.name} (What-If)`
     : `Breakdown for: ${profileName}`
 
   // State for Daily Plate action & Toast
@@ -98,26 +101,25 @@ export function StepResults({
       (rawSodium?.percentage ? (toNumber(rawSodium.percentage) * toNumber(rawSodium.limit_mg || 2000)) / 100 : 0)
   )
 
-  // Standard RDA limits for adult (FSSAI/WHO) vs child (ICMR-NIN)
-  const limits =
-    ageMode === 'adult'
-      ? { sugar: 50, satFat: 22, sodium: 2000, label: 'Age 10 and over (Adult Limits)', name: 'Adult (10+)' }
-      : { sugar: 42, satFat: 18, sodium: 1200, label: 'Age 7–9 (Child Limits)', name: 'Child (7–9)' }
-
-  // Recalculated percentages based on active ageMode
+  // Recalculated percentages based on active 4-way selectedAgeBracket
   const sugarPct = Math.round((sugarGrams / limits.sugar) * 100 * 10) / 10
   const satFatPct = Math.round((satFatGrams / limits.satFat) * 100 * 10) / 10
   const sodiumPct = Math.round((sodiumMg / limits.sodium) * 100 * 10) / 10
   const sugarTeaspoons = Math.round((sugarGrams / 4.0) * 10) / 10
 
-  // Dynamic verdict based on recalculation
-  const flags: string[] = []
-  if (sugarPct > 50) flags.push('High Sugar')
-  if (satFatPct > 50) flags.push('High Saturated Fat')
-  if (sodiumPct > 50) flags.push('High Sodium')
-
-  const dynamicVerdict =
-    flags.length > 0 ? `⚠️ EXCEEDS DAILY LIMIT: ${flags.join(', ')}` : `✅ WITHIN DAILY LIMITS`
+  // BUG-14: Verdict Banner Color Logic
+  // - If ANY metric is > 50%, banner is Red: '🚨 EXCEEDS DAILY LIMITS'
+  // - If ANY metric is between 25% and 50%, banner is Orange: '⚠️ MODERATE LEVELS'
+  // - Only show Green ('✅ WITHIN DAILY LIMITS') if all metrics are under 25%
+  const maxPct = Math.max(sugarPct, satFatPct, sodiumPct)
+  let dynamicVerdict: string
+  if (maxPct > 50) {
+    dynamicVerdict = '🚨 EXCEEDS DAILY LIMITS'
+  } else if (maxPct >= 25) {
+    dynamicVerdict = '⚠️ MODERATE LEVELS'
+  } else {
+    dynamicVerdict = '✅ WITHIN DAILY LIMITS'
+  }
 
   // Execute add to profile plate
   const performAddToPlate = () => {
@@ -140,7 +142,7 @@ export function StepResults({
   // Handle click on Add to Plate button with mismatch check
   const handleAddToPlateClick = () => {
     // Check if user toggled to a different age group than profile
-    const isMismatch = ageMode !== profileAgeCategory
+    const isMismatch = selectedAgeBracket !== profileAgeBracket
     if (isMismatch) {
       setShowMismatchModal(true)
       return
@@ -194,35 +196,30 @@ export function StepResults({
           </motion.span>
         </div>
 
-        {/* Age Toggle Switch: Child vs Adult */}
+        {/* BUG-19: 4-Way Age Selector: 1-3, 4-6, 7-9, 10+ */}
         <div className="flex flex-col items-center gap-1.5 w-full">
           <div className="flex items-center gap-1.5 text-toy-ink/75">
             <Users className="size-3.5" />
-            <span className="text-[11px] font-bold uppercase tracking-wider">Recalculate For</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Recalculate For Age</span>
           </div>
-          <div className="inline-flex rounded-full border-3 border-toy-ink bg-white p-1 shadow-[0_3px_0_0_var(--toy-ink)]">
-            <button
-              type="button"
-              onClick={() => setAgeMode('child')}
-              className={`font-display cursor-pointer rounded-full px-4 py-1 text-xs sm:text-sm font-bold transition-all ${
-                ageMode === 'child'
-                  ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
-                  : 'text-toy-ink/60 hover:text-toy-ink'
-              }`}
-            >
-              👶 Child (7–9)
-            </button>
-            <button
-              type="button"
-              onClick={() => setAgeMode('adult')}
-              className={`font-display cursor-pointer rounded-full px-4 py-1 text-xs sm:text-sm font-bold transition-all ${
-                ageMode === 'adult'
-                  ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
-                  : 'text-toy-ink/60 hover:text-toy-ink'
-              }`}
-            >
-              🧑 Adult (10+)
-            </button>
+          <div className="grid grid-cols-4 gap-1 w-full max-w-sm rounded-2xl border-3 border-toy-ink bg-white p-1 shadow-[0_3px_0_0_var(--toy-ink)]">
+            {(['1-3', '4-6', '7-9', '10+'] as const).map((bracket) => {
+              const active = selectedAgeBracket === bracket
+              return (
+                <button
+                  key={bracket}
+                  type="button"
+                  onClick={() => setSelectedAgeBracket(bracket)}
+                  className={`font-display cursor-pointer rounded-xl py-1.5 text-center text-xs sm:text-sm font-bold transition-all ${
+                    active
+                      ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                      : 'text-toy-ink/60 hover:text-toy-ink'
+                  }`}
+                >
+                  {bracket === '10+' ? '10+ yrs' : `${bracket} yrs`}
+                </button>
+              )
+            })}
           </div>
         </div>
 
