@@ -107,16 +107,16 @@ export function StepResults({
   const sodiumPct = Math.round((sodiumMg / limits.sodium) * 100 * 10) / 10
   const sugarTeaspoons = Math.round((sugarGrams / 4.0) * 10) / 10
 
-  // BUG-14: Verdict Banner Color Logic
-  // - If ANY metric is > 50%, banner is Red: '🚨 EXCEEDS DAILY LIMITS'
-  // - If ANY metric is between 25% and 50%, banner is Orange: '⚠️ MODERATE LEVELS'
-  // - Only show Green ('✅ WITHIN DAILY LIMITS') if all metrics are under 25%
+  // Verdict Banner Color Logic:
+  // - If the highest metric percentage is > 100%, show Red banner: '🚨 EXCEEDS DAILY LIMITS'
+  // - If the highest metric percentage is between 25% and 100% (inclusive), show Orange banner: '⚠️ HIGH LEVELS DETECTED'
+  // - If the highest metric percentage is < 25%, show Green banner: '✅ WITHIN DAILY LIMITS'
   const maxPct = Math.max(sugarPct, satFatPct, sodiumPct)
   let dynamicVerdict: string
-  if (maxPct > 50) {
+  if (maxPct > 100) {
     dynamicVerdict = '🚨 EXCEEDS DAILY LIMITS'
   } else if (maxPct >= 25) {
-    dynamicVerdict = '⚠️ MODERATE LEVELS'
+    dynamicVerdict = '⚠️ HIGH LEVELS DETECTED'
   } else {
     dynamicVerdict = '✅ WITHIN DAILY LIMITS'
   }
