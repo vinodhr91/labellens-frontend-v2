@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Camera, ScanLine, UtensilsCrossed } from 'lucide-react'
 import type { AgeGroup, AnalysisResult, Gender } from '@/lib/scanner'
-import { getActiveProfileName, getStoredProfiles, getTodayPlateItems } from '@/lib/storage'
+import { getActiveProfile, getActiveProfileName, getStoredProfiles, getTodayPlateItems } from '@/lib/storage'
 import { StepOnboarding } from './step-onboarding'
 import { StepUpload } from './step-upload'
 import { StepResults } from './step-results'
@@ -33,8 +33,20 @@ export function ScannerApp() {
     }
   }
 
+  // Profile Persistence: Check localStorage on app load. If a profile exists, skip onboarding screen!
   useEffect(() => {
-    syncData()
+    const profiles = getStoredProfiles()
+    if (profiles.length > 0) {
+      const active = getActiveProfile() || profiles[0]
+      setProfileName(active.name)
+      if (active.gender) setGender(active.gender as Gender)
+      if (active.age_group) setAgeGroup(active.age_group as AgeGroup)
+      setHasLockedFirstProfile(true)
+      setStep(2) // Skip onboarding, jump straight to Scan screen
+      setPlateCount(getTodayPlateItems(active.name).length)
+    } else {
+      syncData()
+    }
   }, [])
 
   return (

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, Check, CheckCircle2, RotateCcw, Utensils, Users, X } from 'lucide-react'
-import { findMetric, toNumber, type AnalysisResult } from '@/lib/scanner'
+import { findMetric, toNumber, type AnalysisResult, type ProductAnalysis } from '@/lib/scanner'
 import { addProductToProfilePlate, getActiveProfile, getActiveProfileName } from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { VerdictStamp } from './verdict-stamp'
@@ -30,6 +30,59 @@ const AGE_BRACKET_CONFIG: Record<
   '4-6': { sugar: 34, satFat: 15, sodium: 1000, label: 'Age 4–6', name: 'Child (4–6)' },
   '7-9': { sugar: 42, satFat: 18, sodium: 1200, label: 'Age 7–9', name: 'Child (7–9)' },
   '10+': { sugar: 50, satFat: 22, sodium: 2000, label: 'Age 10 and over', name: 'Adult (10+)' },
+}
+
+function calculateNutrients(
+  productData: ProductAnalysis,
+  limits: { sugar: number; satFat: number; sodium: number }
+) {
+  const rawSugar = findMetric(productData.breakdown, ['sugar', 'sugars', 'total_sugar', 'added_sugar'])
+  const rawSatFat = findMetric(productData.breakdown, ['saturated_fat', 'sat_fat', 'saturatedFat', 'saturated fat'])
+  const rawSodium = findMetric(productData.breakdown, ['sodium', 'salt'])
+
+  const sugarGrams = toNumber(
+    rawSugar?.value_g ??
+      rawSugar?.grams ??
+      (rawSugar?.percentage ? (toNumber(rawSugar.percentage) * toNumber(rawSugar.limit_g || limits.sugar)) / 100 : 0)
+  )
+  const satFatGrams = toNumber(
+    rawSatFat?.value_g ??
+      rawSatFat?.grams ??
+      (rawSatFat?.percentage ? (toNumber(rawSatFat.percentage) * toNumber(rawSatFat.limit_g || limits.satFat)) / 100 : 0)
+  )
+  const sodiumMg = toNumber(
+    rawSodium?.value_mg ??
+      rawSodium?.mg ??
+      (rawSodium?.percentage ? (toNumber(rawSodium.percentage) * toNumber(rawSodium.limit_mg || limits.sodium)) / 100 : 0)
+  )
+
+  const sugarPct = Math.round((sugarGrams / limits.sugar) * 100 * 10) / 10
+  const satFatPct = Math.round((satFatGrams / limits.satFat) * 100 * 10) / 10
+  const sodiumPct = Math.round((sodiumMg / limits.sodium) * 100 * 10) / 10
+  const sugarTeaspoons = Math.round((sugarGrams / 4.0) * 10) / 10
+
+  const maxPct = Math.max(sugarPct, satFatPct, sodiumPct)
+  let dynamicVerdict: string
+  if (limits.sugar === 0 && (sugarGrams > 0 || sodiumMg > 0)) {
+    dynamicVerdict = '🚨 NOT RECOMMENDED FOR INFANTS'
+  } else if (maxPct > 100) {
+    dynamicVerdict = '🚨 EXCEEDS DAILY LIMITS'
+  } else if (maxPct >= 25) {
+    dynamicVerdict = '⚠️ MODERATE LEVELS'
+  } else {
+    dynamicVerdict = '✅ WITHIN DAILY LIMITS'
+  }
+
+  return {
+    sugarGrams,
+    satFatGrams,
+    sodiumMg,
+    sugarPct,
+    satFatPct,
+    sodiumPct,
+    sugarTeaspoons,
+    dynamicVerdict,
+  }
 }
 
 export function StepResults({
@@ -62,7 +115,7 @@ export function StepResults({
     return '10+'
   })()
 
-  // BUG-19: 4-Way Selector for exact age brackets (1-3, 4-6, 7-9, 10+)
+  // 4-Way Selector for exact age brackets (1-3, 4-6, 7-9, 10+)
   const [selectedAgeBracket, setSelectedAgeBracket] = useState<AgeBracket>(profileAgeBracket)
 
   // Standard RDA limits for selected bracket (from ICMR-NIN / WHO / FSSAI)
@@ -74,80 +127,64 @@ export function StepResults({
     ? `Breakdown for: ${limits.name} (What-If)`
     : `Breakdown for: ${profileName}`
 
-  // State for Daily Plate action & Toast
-  const [addedToPlate, setAddedToPlate] = useState(false)
+  // Toast and Mismatch modal state
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [showMismatchModal, setShowMismatchModal] = useState(false)
+  const [pendingAdd, setPendingAdd] = useState<{
+    name: string
+    sugarG: number
+    satFatG: number
+    sodiumMg: number
+    servingSize?: string
+  } | null>(null)
 
-  // Raw nutrient values from analysis
-  const rawSugar = findMetric(result.breakdown, ['sugar', 'sugars', 'total_sugar', 'added_sugar'])
-  const rawSatFat = findMetric(result.breakdown, ['saturated_fat', 'sat_fat', 'saturatedFat', 'saturated fat'])
-  const rawSodium = findMetric(result.breakdown, ['sodium', 'salt'])
+  // Single scan added state
+  const [singleAdded, setSingleAdded] = useState(false)
 
-  // Actual nutrient values per serving
-  const sugarGrams = toNumber(
-    rawSugar?.value_g ??
-      rawSugar?.grams ??
-      (rawSugar?.percentage ? (toNumber(rawSugar.percentage) * toNumber(rawSugar.limit_g || 50)) / 100 : 0)
-  )
-  const satFatGrams = toNumber(
-    rawSatFat?.value_g ??
-      rawSatFat?.grams ??
-      (rawSatFat?.percentage ? (toNumber(rawSatFat.percentage) * toNumber(rawSatFat.limit_g || 22)) / 100 : 0)
-  )
-  const sodiumMg = toNumber(
-    rawSodium?.value_mg ??
-      rawSodium?.mg ??
-      (rawSodium?.percentage ? (toNumber(rawSodium.percentage) * toNumber(rawSodium.limit_mg || 2000)) / 100 : 0)
-  )
+  // Check if compare mode
+  const productA = result.product_a || result
+  const productB = result.product_b || null
+  const isCompareMode = Boolean(productB)
 
-  // Recalculated percentages based on active 4-way selectedAgeBracket
-  const sugarPct = Math.round((sugarGrams / limits.sugar) * 100 * 10) / 10
-  const satFatPct = Math.round((satFatGrams / limits.satFat) * 100 * 10) / 10
-  const sodiumPct = Math.round((sodiumMg / limits.sodium) * 100 * 10) / 10
-  const sugarTeaspoons = Math.round((sugarGrams / 4.0) * 10) / 10
-
-  // Verdict Banner Color Logic:
-  // - If the highest metric percentage is > 100%, show Red banner: '🚨 EXCEEDS DAILY LIMITS'
-  // - If the highest metric percentage is between 25% and 100% (inclusive), show Orange banner: '⚠️ HIGH LEVELS DETECTED'
-  // - If the highest metric percentage is < 25%, show Green banner: '✅ WITHIN DAILY LIMITS'
-  const maxPct = Math.max(sugarPct, satFatPct, sodiumPct)
-  let dynamicVerdict: string
-  if (maxPct > 100) {
-    dynamicVerdict = '🚨 EXCEEDS DAILY LIMITS'
-  } else if (maxPct >= 25) {
-    dynamicVerdict = '⚠️ HIGH LEVELS DETECTED'
-  } else {
-    dynamicVerdict = '✅ WITHIN DAILY LIMITS'
-  }
+  // Calculate metrics for Product A and Product B
+  const calcsA = calculateNutrients(productA, limits)
+  const calcsB = productB ? calculateNutrients(productB, limits) : null
 
   // Execute add to profile plate
-  const performAddToPlate = () => {
+  const performAddToPlate = (
+    productName: string,
+    sugarG: number,
+    satFatG: number,
+    sodiumMg: number,
+    servingSize?: string
+  ) => {
     const res = addProductToProfilePlate(profileName, {
-      product: result.product || 'Scanned Food Product',
-      serving_size: result.serving_size,
-      sugar_g: sugarGrams,
-      sat_fat_g: satFatGrams,
+      product: productName || 'Scanned Food Product',
+      serving_size: servingSize,
+      sugar_g: sugarG,
+      sat_fat_g: satFatG,
       sodium_mg: sodiumMg,
     })
 
     if (res.success) {
-      setAddedToPlate(true)
-      setToastMessage(`🍽️ Added to ${profileName}'s Plate! (${res.totalItems} items today)`)
+      setToastMessage(`🍽️ Added "${productName}" to ${profileName}'s Plate! (${res.totalItems} items today)`)
       if (onPlateUpdated) onPlateUpdated()
       setTimeout(() => setToastMessage(null), 4000)
     }
   }
 
-  // Handle click on Add to Plate button with mismatch check
-  const handleAddToPlateClick = () => {
-    // Check if user toggled to a different age group than profile
-    const isMismatch = selectedAgeBracket !== profileAgeBracket
-    if (isMismatch) {
-      setShowMismatchModal(true)
+  // Trigger add to plate with mismatch check
+  const handleRequestAddToPlate = (
+    productName: string,
+    sugarG: number,
+    satFatG: number,
+    sodiumMg: number,
+    servingSize?: string
+  ) => {
+    if (selectedAgeBracket !== profileAgeBracket) {
+      setPendingAdd({ name: productName, sugarG, satFatG, sodiumMg, servingSize })
       return
     }
-    performAddToPlate()
+    performAddToPlate(productName, sugarG, satFatG, sodiumMg, servingSize)
   }
 
   return (
@@ -183,7 +220,7 @@ export function StepResults({
       </AnimatePresence>
 
       <div className="flex flex-col items-center gap-4">
-        {/* Top Profile / Demographic Badge - Responsive & never cut off on mobile */}
+        {/* Top Profile / Demographic Badge */}
         <div className="w-full max-w-full px-2 flex justify-center">
           <motion.span
             key={badgeText}
@@ -196,7 +233,7 @@ export function StepResults({
           </motion.span>
         </div>
 
-        {/* BUG-19: 4-Way Age Selector: 1-3, 4-6, 7-9, 10+ */}
+        {/* 4-Way Age Selector: 1-3, 4-6, 7-9, 10+ */}
         <div className="flex flex-col items-center gap-1.5 w-full">
           <div className="flex items-center gap-1.5 text-toy-ink/75">
             <Users className="size-3.5" />
@@ -222,82 +259,134 @@ export function StepResults({
             })}
           </div>
         </div>
+      </div>
 
-        {(result.product || result.serving_size) && (
-          <div className="flex flex-col items-center gap-2">
-            {result.product && result.product !== 'Unknown' && (
-              <p className="font-display text-center text-2xl font-bold text-white [text-shadow:0_3px_0_var(--toy-ink)] text-balance">
-                {result.product}
-              </p>
-            )}
-            {result.serving_size && (
-              <span className="font-display rounded-full border-[3px] border-toy-ink bg-white px-4 py-1 text-sm font-bold text-toy-ink">
-                Serving Size: {result.serving_size}
-              </span>
-            )}
+      {/* RESULTS DISPLAY: STACKED COMPARE VIEW OR SINGLE SCAN VIEW */}
+      {isCompareMode && productB && calcsB ? (
+        <div className="flex flex-col gap-6">
+          {/* Top Half: Product A */}
+          <StackedProductSection
+            tag="Product A"
+            badgeBg="bg-toy-yellow"
+            productData={productA}
+            calcs={calcsA}
+            limits={limits}
+            profileName={profileName}
+            onAddToPlate={(name, sugar, fat, sodium, serving) =>
+              handleRequestAddToPlate(name, sugar, fat, sodium, serving)
+            }
+          />
+
+          {/* Playful Compare Divider */}
+          <div className="flex items-center justify-center my-0.5">
+            <span className="font-display rounded-full border-4 border-toy-ink bg-toy-orange px-6 py-2 text-base sm:text-lg font-black text-white shadow-[0_4px_0_0_var(--toy-ink)]">
+              ⚖️ VS ⚖️
+            </span>
           </div>
-        )}
 
-        <VerdictStamp verdict={dynamicVerdict} />
-      </div>
-
-      {/* Main Sugar Kitchen Jar */}
-      <SugarBottle
-        percentage={sugarPct}
-        teaspoons={sugarTeaspoons}
-        grams={sugarGrams}
-        limitG={limits.sugar}
-      />
-
-      {/* Saturated Fat Tube & Sodium Salt Shaker */}
-      <div className="grid grid-cols-2 gap-4">
-        <MiniMeter
-          label="Saturated Fat"
-          shape="tube"
-          percentage={satFatPct}
-          delay={0.15}
-          detail={ratio(satFatGrams, limits.satFat, 'g')}
-        />
-        <MiniMeter
-          label="Sodium"
-          shape="salt"
-          percentage={sodiumPct}
-          delay={0.25}
-          detail={ratio(sodiumMg, limits.sodium, 'mg')}
-        />
-      </div>
-
-      {/* 3. Add to [Profile Name]'s Plate Button */}
-      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-        <button
-          type="button"
-          onClick={handleAddToPlateClick}
-          className={`toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink py-4 text-lg font-bold shadow-[0_4px_0_0_var(--toy-ink)] transition-all cursor-pointer ${
-            addedToPlate
-              ? 'bg-toy-green text-white'
-              : 'bg-toy-yellow text-toy-ink hover:brightness-105'
-          }`}
-        >
-          {addedToPlate ? (
-            <>
-              <Check className="size-6 stroke-[3]" />
-              <span>Added to {profileName}&apos;s Plate!</span>
-            </>
-          ) : (
-            <>
-              <Utensils className="size-6 stroke-[2.5]" />
-              <span>🍽️ Add to {profileName}&apos;s Plate</span>
-            </>
+          {/* Bottom Half: Product B */}
+          <StackedProductSection
+            tag="Product B"
+            badgeBg="bg-[#eef8ff]"
+            productData={productB}
+            calcs={calcsB}
+            limits={limits}
+            profileName={profileName}
+            onAddToPlate={(name, sugar, fat, sodium, serving) =>
+              handleRequestAddToPlate(name, sugar, fat, sodium, serving)
+            }
+          />
+        </div>
+      ) : (
+        /* Single Scan Results */
+        <div className="flex flex-col gap-6">
+          {(productA.product || productA.serving_size) && (
+            <div className="flex flex-col items-center gap-2">
+              {productA.product && productA.product !== 'Unknown' && (
+                <p className="font-display text-center text-2xl font-bold text-white [text-shadow:0_3px_0_var(--toy-ink)] text-balance">
+                  {productA.product}
+                </p>
+              )}
+              {productA.serving_size && (
+                <span className="font-display rounded-full border-[3px] border-toy-ink bg-white px-4 py-1 text-sm font-bold text-toy-ink">
+                  Serving Size: {productA.serving_size}
+                </span>
+              )}
+            </div>
           )}
-        </button>
-      </motion.div>
+
+          <VerdictStamp verdict={calcsA.dynamicVerdict} />
+
+          <SugarBottle
+            percentage={calcsA.sugarPct}
+            teaspoons={calcsA.sugarTeaspoons}
+            grams={calcsA.sugarGrams}
+            limitG={limits.sugar}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <MiniMeter
+              label="Saturated Fat"
+              shape="tube"
+              percentage={calcsA.satFatPct}
+              delay={0.15}
+              detail={ratio(calcsA.satFatGrams, limits.satFat, 'g')}
+            />
+            <MiniMeter
+              label="Sodium"
+              shape="salt"
+              percentage={calcsA.sodiumPct}
+              delay={0.25}
+              detail={ratio(calcsA.sodiumMg, limits.sodium, 'mg')}
+            />
+          </div>
+
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <button
+              type="button"
+              onClick={() => {
+                handleRequestAddToPlate(
+                  productA.product || 'Scanned Food Product',
+                  calcsA.sugarGrams,
+                  calcsA.satFatGrams,
+                  calcsA.sodiumMg,
+                  productA.serving_size
+                )
+                setSingleAdded(true)
+                setTimeout(() => setSingleAdded(false), 3000)
+              }}
+              className={`toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink py-4 text-lg font-bold shadow-[0_4px_0_0_var(--toy-ink)] transition-all cursor-pointer ${
+                singleAdded
+                  ? 'bg-toy-green text-white'
+                  : 'bg-toy-yellow text-toy-ink hover:brightness-105'
+              }`}
+            >
+              {singleAdded ? (
+                <>
+                  <Check className="size-6 stroke-[3]" />
+                  <span>Added to {profileName}&apos;s Plate!</span>
+                </>
+              ) : (
+                <>
+                  <Utensils className="size-6 stroke-[2.5]" />
+                  <span>🍽️ Add to {profileName}&apos;s Plate</span>
+                </>
+              )}
+            </button>
+          </motion.div>
+
+          {productA.other_nutrients && <NutrientsGrid nutrients={productA.other_nutrients} />}
+
+          <HiddenIngredients hidden={productA.hidden_ingredients} raw={productA.raw_ingredients} />
+        </div>
+      )}
 
       {/* Mismatch Confirmation Modal */}
       <AnimatePresence>
-        {showMismatchModal && (
+        {pendingAdd && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
-            onClick={() => setShowMismatchModal(false)}
+            onClick={() => setPendingAdd(null)}
           >
             <motion.div
               initial={{ scale: 0.88, opacity: 0, y: 20 }}
@@ -312,7 +401,7 @@ export function StepResults({
             >
               <button
                 type="button"
-                onClick={() => setShowMismatchModal(false)}
+                onClick={() => setPendingAdd(null)}
                 className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink transition-transform hover:scale-110 cursor-pointer"
                 aria-label="Close dialog"
               >
@@ -328,28 +417,32 @@ export function StepResults({
                 </h4>
               </div>
 
-              {/* Exact user requested text */}
               <p className="mt-4 text-sm sm:text-base font-semibold leading-relaxed text-toy-ink text-pretty">
-                You are viewing limits for {limits.name}, but your active profile is {profileName}. Add this to {profileName}&apos;s plate?
+                You are viewing limits for {limits.name}, but your active profile is {profileName}. Add &ldquo;{pendingAdd.name}&rdquo; to {profileName}&apos;s plate?
               </p>
 
-              {/* Requested Buttons: [ Yes ] and [ Cancel ] */}
               <div className="mt-6 flex flex-col gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
-                    performAddToPlate()
-                    setShowMismatchModal(false)
+                    performAddToPlate(
+                      pendingAdd.name,
+                      pendingAdd.sugarG,
+                      pendingAdd.satFatG,
+                      pendingAdd.sodiumMg,
+                      pendingAdd.servingSize
+                    )
+                    setPendingAdd(null)
                   }}
                   className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-2xl border-4 border-toy-ink bg-toy-yellow py-3 text-base font-bold text-toy-ink shadow-[0_4px_0_0_var(--toy-ink)] hover:brightness-105 cursor-pointer"
                 >
                   <Check className="size-5 stroke-[3]" />
-                  <span>Yes</span>
+                  <span>Yes, add for {profileName}</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setShowMismatchModal(false)}
+                  onClick={() => setPendingAdd(null)}
                   className="font-display w-full rounded-xl border-2 border-toy-ink bg-muted py-2.5 text-sm font-bold text-toy-ink transition-colors hover:bg-muted/80 cursor-pointer"
                 >
                   Cancel
@@ -360,12 +453,7 @@ export function StepResults({
         )}
       </AnimatePresence>
 
-      {result.other_nutrients && <NutrientsGrid nutrients={result.other_nutrients} />}
-
-      {/* Clickable Hidden Ingredients with Explanations and Google News search */}
-      <HiddenIngredients hidden={result.hidden_ingredients} raw={result.raw_ingredients} />
-
-      {/* Pixar-style Scientific Sources Modal */}
+      {/* Citations & Feedback */}
       {result.citations && result.citations.length > 0 && <Citations citations={result.citations} />}
 
       <Feedback />
@@ -376,8 +464,121 @@ export function StepResults({
       </ToyButton>
 
       {result.disclaimer && (
-        <p className="px-2 text-center text-xs leading-relaxed text-toy-ink/70 text-pretty">{result.disclaimer}</p>
+        <p className="px-2 text-center text-xs leading-relaxed text-toy-ink/70 text-pretty">
+          {result.disclaimer}
+        </p>
       )}
     </section>
+  )
+}
+
+function StackedProductSection({
+  tag,
+  badgeBg,
+  productData,
+  calcs,
+  limits,
+  profileName,
+  onAddToPlate,
+}: {
+  tag: string
+  badgeBg: string
+  productData: ProductAnalysis
+  calcs: ReturnType<typeof calculateNutrients>
+  limits: { sugar: number; satFat: number; sodium: number }
+  profileName: string
+  onAddToPlate: (
+    name: string,
+    sugarG: number,
+    satFatG: number,
+    sodiumMg: number,
+    servingSize?: string
+  ) => void
+}) {
+  const [added, setAdded] = useState(false)
+
+  return (
+    <div className="toy-block flex flex-col gap-4 p-5 bg-white shadow-xl">
+      {/* Product Tag & Name */}
+      <div className="flex flex-col items-center gap-1.5 text-center">
+        <span
+          className={`font-display inline-flex items-center rounded-full border-3 border-toy-ink px-4 py-1 text-xs sm:text-sm font-black uppercase tracking-wider text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] ${badgeBg}`}
+        >
+          {tag}
+        </span>
+        <h3 className="font-display text-xl sm:text-2xl font-bold leading-tight text-toy-ink text-balance">
+          {productData.product || `${tag}`}
+        </h3>
+        {productData.serving_size && (
+          <span className="font-display rounded-full border-2 border-toy-ink bg-[#f0f4f9] px-3 py-0.5 text-xs font-bold text-toy-ink">
+            Serving Size: {productData.serving_size}
+          </span>
+        )}
+      </div>
+
+      {/* Individual Verdict Banner for this Product */}
+      <VerdictStamp verdict={calcs.dynamicVerdict} />
+
+      {/* Product Jars */}
+      <SugarBottle
+        percentage={calcs.sugarPct}
+        teaspoons={calcs.sugarTeaspoons}
+        grams={calcs.sugarGrams}
+        limitG={limits.sugar}
+      />
+
+      <div className="grid grid-cols-2 gap-3">
+        <MiniMeter
+          label="Saturated Fat"
+          shape="tube"
+          percentage={calcs.satFatPct}
+          delay={0.1}
+          detail={ratio(calcs.satFatGrams, limits.satFat, 'g')}
+        />
+        <MiniMeter
+          label="Sodium"
+          shape="salt"
+          percentage={calcs.sodiumPct}
+          delay={0.2}
+          detail={ratio(calcs.sodiumMg, limits.sodium, 'mg')}
+        />
+      </div>
+
+      {/* Add to Plate Button */}
+      <button
+        type="button"
+        onClick={() => {
+          onAddToPlate(
+            productData.product || tag,
+            calcs.sugarGrams,
+            calcs.satFatGrams,
+            calcs.sodiumMg,
+            productData.serving_size
+          )
+          setAdded(true)
+          setTimeout(() => setAdded(false), 3000)
+        }}
+        className={`toy-press font-display flex w-full items-center justify-center gap-2 rounded-xl border-3 border-toy-ink py-3 text-sm sm:text-base font-bold shadow-[0_3px_0_0_var(--toy-ink)] transition-all cursor-pointer ${
+          added ? 'bg-toy-green text-white' : 'bg-toy-yellow text-toy-ink hover:brightness-105'
+        }`}
+      >
+        {added ? (
+          <>
+            <Check className="size-5 stroke-[3]" />
+            <span>Added {tag} to Plate!</span>
+          </>
+        ) : (
+          <>
+            <Utensils className="size-5 stroke-[2.5]" />
+            <span>🍽️ Add {tag} to {profileName}&apos;s Plate</span>
+          </>
+        )}
+      </button>
+
+      {/* Hidden Ingredients for this Product */}
+      {productData.hidden_ingredients && productData.hidden_ingredients.length > 0 && (
+        <HiddenIngredients hidden={productData.hidden_ingredients} raw={productData.raw_ingredients} />
+      )}
+    </div>
   )
 }

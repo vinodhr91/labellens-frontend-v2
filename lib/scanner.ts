@@ -40,15 +40,20 @@ export type HiddenIngredientItem = {
   description?: string
 }
 
-export type AnalysisResult = {
+export type ProductAnalysis = {
   product?: string
   serving_size?: string
-  demographic?: string
   verdict?: string
   breakdown?: Record<string, Metric | undefined>
   other_nutrients?: Record<string, unknown>
   hidden_ingredients?: (HiddenIngredientItem | string)[]
   raw_ingredients?: string | string[]
+}
+
+export type AnalysisResult = ProductAnalysis & {
+  product_a?: ProductAnalysis
+  product_b?: ProductAnalysis | null
+  demographic?: string
   citations?: Citation[]
   disclaimer?: string
 }

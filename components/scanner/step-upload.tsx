@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, Info, ScanLine } from 'lucide-react'
+import { ArrowLeft, ScanLine } from 'lucide-react'
 import { API_URL, type AgeGroup, type AnalysisResult, type Gender } from '@/lib/scanner'
-import { cn } from '@/lib/utils'
 import { ToyButton } from './toy-button'
 import { UploadBox, type PickedImage } from './upload-box'
-
-type Layout = 'same' | 'separate' | null
 
 const HEALTH_FACTS = [
   'Why track only Sugar, Fat, and Sodium? Because WHO/ICMR identifies these as the Big 3 hidden dangers in ultra-processed foods.',
@@ -51,7 +48,7 @@ export function StepUpload({
   onBack: () => void
   onResult: (data: AnalysisResult) => void
 }) {
-  const [layout, setLayout] = useState<Layout>(null)
+  const [scanMode, setScanMode] = useState<'single' | 'compare'>('single')
   const [image1, setImage1] = useState<PickedImage | null>(null)
   const [image2, setImage2] = useState<PickedImage | null>(null)
   const [loading, setLoading] = useState(false)
@@ -59,7 +56,7 @@ export function StepUpload({
   const [shuffledFacts, setShuffledFacts] = useState<string[]>(() => shuffleFacts(HEALTH_FACTS))
   const [factIndex, setFactIndex] = useState(0)
 
-  // BUG-16: Carousel timer slowed to 3.5 seconds so users can easily read each fact
+  // Carousel timer: every 3.5 seconds smoothly advance to the next fact
   useEffect(() => {
     if (!loading || shuffledFacts.length === 0) return
 
@@ -70,21 +67,28 @@ export function StepUpload({
     return () => clearInterval(interval)
   }, [loading, shuffledFacts])
 
-  const canScan = !!image1 && (layout === 'same' || (layout === 'separate' && !!image2)) && !loading
+  const canScan =
+    scanMode === 'single'
+      ? !!image1 && !loading
+      : !!image1 && !!image2 && !loading
 
   async function handleScan() {
     if (!image1) return
-    // Randomize the facts array on every scan so user rarely sees same fact twice in a row
+    if (scanMode === 'compare' && !image2) return
+
     setShuffledFacts(shuffleFacts(HEALTH_FACTS))
     setFactIndex(0)
     setLoading(true)
     setError(null)
+
     try {
       const form = new FormData()
       form.append('age_group', ageGroup)
       form.append('gender', gender)
       form.append('image1', image1.file)
-      if (layout === 'separate' && image2) form.append('image2', image2.file)
+      if (scanMode === 'compare' && image2) {
+        form.append('image2', image2.file)
+      }
 
       const res = await fetch(API_URL, { method: 'POST', body: form })
       if (!res.ok) {
@@ -101,60 +105,99 @@ export function StepUpload({
   }
 
   return (
-    <section className="flex flex-col gap-6" aria-labelledby="upload-title">
-      <div className="toy-block flex flex-col gap-4 p-5">
-        <h2 id="upload-title" className="text-2xl font-bold leading-tight text-toy-ink text-balance">
-          Are the Ingredients and Nutrition Facts on the same side of the packet?
-        </h2>
-        <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-labelledby="upload-title">
-          <ChoiceButton active={layout === 'same'} onClick={() => setLayout('same')} color="bg-toy-green">
-            Yes, Same Side
-          </ChoiceButton>
-          <ChoiceButton active={layout === 'separate'} onClick={() => setLayout('separate')} color="bg-toy-orange">
-            No, Separate Sides
-          </ChoiceButton>
+    <section className="flex flex-col gap-5" aria-labelledby="upload-title">
+      {/* Scan Mode Toggle: Single Scan vs Compare */}
+      <div className="flex flex-col items-center gap-1.5 w-full">
+        <div className="inline-flex rounded-full border-3 border-toy-ink bg-white p-1 shadow-[0_3px_0_0_var(--toy-ink)]">
+          <button
+            type="button"
+            onClick={() => {
+              setScanMode('single')
+              setImage2(null)
+            }}
+            className={`font-display cursor-pointer rounded-full px-5 py-2 text-sm sm:text-base font-bold transition-all ${
+              scanMode === 'single'
+                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                : 'text-toy-ink/60 hover:text-toy-ink'
+            }`}
+          >
+            📷 Single Scan
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setScanMode('compare')
+            }}
+            className={`font-display cursor-pointer rounded-full px-5 py-2 text-sm sm:text-base font-bold transition-all ${
+              scanMode === 'compare'
+                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                : 'text-toy-ink/60 hover:text-toy-ink'
+            }`}
+          >
+            ⚖️ Compare
+          </button>
         </div>
-        <p className="flex items-start gap-2 rounded-2xl bg-[#eef8ff] p-3 text-sm font-semibold text-muted-foreground">
-          <Info className="mt-0.5 size-4 shrink-0 text-toy-ink" aria-hidden="true" />
-          If both are on the same side, just upload the photo once.
-        </p>
       </div>
 
-      <AnimatePresence initial={false}>
-        {layout && (
+      <AnimatePresence mode="wait">
+        {scanMode === 'single' ? (
           <motion.div
-            key="boxes"
-            initial={{ opacity: 0, y: 30 }}
+            key="single-mode-box"
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.2 }}
             className="flex flex-col gap-4"
           >
+            <div className="toy-block p-4 text-center">
+              <h2 id="upload-title" className="font-display text-xl sm:text-2xl font-bold leading-tight text-toy-ink text-balance">
+                Snap or upload the nutrition label
+              </h2>
+              <p className="mt-1 text-xs sm:text-sm font-semibold text-muted-foreground text-pretty">
+                Make sure the nutrition table and ingredients list are clearly visible.
+              </p>
+            </div>
+
             <UploadBox
-              id="image1"
-              label={layout === 'same' ? 'Label photo' : 'Ingredients side'}
-              hint={layout === 'same' ? 'Ingredients + Nutrition Facts' : 'Photo of the ingredients list'}
+              id="single-label"
+              label="Product Label Photo"
+              hint="Nutrition table + Ingredients list"
               value={image1}
               onChange={setImage1}
             />
-            <AnimatePresence>
-              {layout === 'separate' && (
-                <motion.div
-                  key="second"
-                  initial={{ opacity: 0, scale: 0.6, y: -40 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.6, y: -40 }}
-                  transition={{ type: 'spring', stiffness: 320, damping: 18 }}
-                >
-                  <UploadBox
-                    id="image2"
-                    label="Nutrition Facts side"
-                    hint="Photo of the nutrition table"
-                    value={image2}
-                    onChange={setImage2}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="compare-mode-boxes"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.2 }}
+            className="flex flex-col gap-4"
+          >
+            <div className="toy-block p-4 bg-[#fff9ea] text-center border-3 border-toy-ink">
+              <h2 id="upload-title" className="font-display text-xl sm:text-2xl font-bold leading-tight text-toy-ink text-balance">
+                ⚖️ Compare Two Products
+              </h2>
+              <p className="mt-1 text-xs sm:text-sm font-semibold text-muted-foreground text-pretty">
+                Upload labels for Product A and Product B to see their nutrition stacked side-by-side.
+              </p>
+            </div>
+
+            <UploadBox
+              id="product-a"
+              label="Product A"
+              hint="Label photo for Product A"
+              value={image1}
+              onChange={setImage1}
+            />
+            <UploadBox
+              id="product-b"
+              label="Product B"
+              hint="Label photo for Product B"
+              value={image2}
+              onChange={setImage2}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -166,23 +209,28 @@ export function StepUpload({
         </div>
       )}
 
-      {/* BUG-16: Unified Scan Action & Loading Carousel Container */}
+      {/* Unified Scan Action & Loading Carousel Container */}
       <div className="flex flex-col gap-3">
         <div className="flex gap-3">
           <ToyButton variant="white" onClick={onBack} aria-label="Back" className="px-4" disabled={loading}>
             <ArrowLeft className="size-7" strokeWidth={3} aria-hidden="true" />
           </ToyButton>
-          <ToyButton onClick={handleScan} disabled={!canScan} className="flex-1 py-5 text-2xl">
+          <ToyButton onClick={handleScan} disabled={!canScan} className="flex-1 py-5 text-xl sm:text-2xl">
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <ScanLine className="size-7 animate-pulse" strokeWidth={3} aria-hidden="true" />
                 Scanning…
               </span>
+            ) : scanMode === 'compare' ? (
+              <span className="flex items-center justify-center gap-2">
+                <span>⚖️</span>
+                <span>Compare Products</span>
+              </span>
             ) : (
-              <>
+              <span className="flex items-center justify-center gap-2">
                 <ScanLine className="size-7" strokeWidth={3} aria-hidden="true" />
-                Scan
-              </>
+                <span>Scan</span>
+              </span>
             )}
           </ToyButton>
         </div>
@@ -204,7 +252,7 @@ export function StepUpload({
                   <span className="relative inline-flex rounded-full size-2.5 bg-toy-orange"></span>
                 </span>
                 <span className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink/80">
-                  Scanning Food Label…
+                  {scanMode === 'compare' ? 'Comparing Both Products with AI…' : 'Scanning Food Label with AI…'}
                 </span>
               </div>
 
@@ -235,33 +283,5 @@ export function StepUpload({
         </AnimatePresence>
       </div>
     </section>
-  )
-}
-
-function ChoiceButton({
-  active,
-  color,
-  children,
-  onClick,
-}: {
-  active: boolean
-  color: string
-  children: React.ReactNode
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={active}
-      onClick={onClick}
-      className={cn(
-        'toy-press font-display min-h-20 rounded-2xl border-4 border-toy-ink px-3 py-3 text-lg font-bold leading-tight',
-        'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-toy-yellow',
-        active ? `${color} -translate-y-0.5 text-white` : 'bg-white text-toy-ink',
-      )}
-    >
-      {children}
-    </button>
   )
 }
