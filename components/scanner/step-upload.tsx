@@ -56,13 +56,13 @@ export function StepUpload({
   const [shuffledFacts, setShuffledFacts] = useState<string[]>(() => shuffleFacts(HEALTH_FACTS))
   const [factIndex, setFactIndex] = useState(0)
 
-  // Carousel timer: every 3.5 seconds smoothly advance to the next fact
+  // Carousel timer: every 5.0 seconds smoothly advance to the next fact
   useEffect(() => {
     if (!loading || shuffledFacts.length === 0) return
 
     const interval = setInterval(() => {
       setFactIndex((prev) => (prev + 1) % shuffledFacts.length)
-    }, 3500)
+    }, 5000)
 
     return () => clearInterval(interval)
   }, [loading, shuffledFacts])
@@ -276,7 +276,7 @@ export function StepUpload({
               </div>
 
               <p className="text-[11px] font-semibold text-toy-ink/70">
-                The first scan can take up to a minute while the cloud server wakes up.
+                Analyzing label…
               </p>
             </motion.div>
           )}

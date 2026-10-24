@@ -43,6 +43,8 @@ export type HiddenIngredientItem = {
 export type ProductAnalysis = {
   product?: string
   serving_size?: string
+  net_weight?: string
+  servings_per_pack?: number
   verdict?: string
   breakdown?: Record<string, Metric | undefined>
   other_nutrients?: Record<string, unknown>

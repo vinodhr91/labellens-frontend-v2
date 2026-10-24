@@ -10,11 +10,13 @@ export function SugarBottle({
   teaspoons,
   grams,
   limitG,
+  wholePackTeaspoons,
 }: {
   percentage: number
   teaspoons?: number | string
   grams?: number | string
   limitG?: number | string
+  wholePackTeaspoons?: number | null
 }) {
   const { fill, label } = levelColor(percentage)
   const tsp = teaspoons != null ? Math.round(toNumber(teaspoons) * 10) / 10 : null
@@ -46,6 +48,11 @@ export function SugarBottle({
           {limitG != null && limitG !== '' && (
             <span className="font-display mt-2 w-fit rounded-full border-[3px] border-toy-ink bg-[#eef8ff] px-3 py-0.5 text-sm font-bold text-toy-ink">
               Limit: {limitG}g
+            </span>
+          )}
+          {wholePackTeaspoons != null && wholePackTeaspoons > 0 && (
+            <span className="font-display mt-1 text-xs sm:text-sm font-bold text-toy-ink">
+              Whole Pack: <strong className="text-toy-red font-black">{wholePackTeaspoons} teaspoons</strong>
             </span>
           )}
           <span className="mt-3 text-sm font-semibold text-muted-foreground">

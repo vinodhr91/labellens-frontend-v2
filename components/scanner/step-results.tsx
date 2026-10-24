@@ -32,6 +32,94 @@ const AGE_BRACKET_CONFIG: Record<
   '10+': { sugar: 50, satFat: 22, sodium: 2000, label: 'Age 10 and over', name: 'Adult (10+)' },
 }
 
+function parseGramsOrMl(str: string | undefined): number | null {
+  if (!str) return null
+  const m = str.match(/([0-9.]+)\s*(g|gm|gram|grams|ml|milliliter)/i)
+  if (m) {
+    const val = parseFloat(m[1])
+    return isNaN(val) ? null : val
+  }
+  const numOnly = parseFloat(str.replace(/[^0-9.]/g, ''))
+  return !isNaN(numOnly) && numOnly > 0 ? numOnly : null
+}
+
+function calculateWholePackTeaspoons(
+  productData: ProductAnalysis,
+  sugarGramsPerServing: number
+): number | null {
+  const p = productData as Record<string, unknown>
+  const directServings = toNumber(p.servings_per_pack || p.total_servings || p.servings)
+  if (directServings > 1) {
+    const tspPerServing = sugarGramsPerServing / 4.0
+    return Math.round(tspPerServing * directServings * 10) / 10
+  }
+
+  const netWeightStr = String(p.net_weight || p.net_quantity || p.pack_weight || p.weight || '')
+  const servingSizeStr = String(p.serving_size || '')
+
+  const netWeightNum = parseGramsOrMl(netWeightStr)
+  const servingSizeNum = parseGramsOrMl(servingSizeStr)
+
+  if (netWeightNum && servingSizeNum && servingSizeNum > 0 && netWeightNum > servingSizeNum) {
+    const servings = netWeightNum / servingSizeNum
+    const tspPerServing = sugarGramsPerServing / 4.0
+    return Math.round(tspPerServing * servings * 10) / 10
+  }
+
+  return null
+}
+
+function generateOneGlanceSummary(
+  calcs: {
+    sugarPct: number
+    satFatPct: number
+    sodiumPct: number
+    sugarTeaspoons: number
+    sugarGrams: number
+    satFatGrams: number
+    sodiumMg: number
+  },
+  hiddenCount: number
+): string {
+  const isHighSugar = calcs.sugarPct >= 25
+  const isHighSatFat = calcs.satFatPct >= 25
+  const isHighSodium = calcs.sodiumPct >= 25
+
+  const flaggedText =
+    hiddenCount === 0
+      ? 'no flagged ingredients'
+      : `${hiddenCount} flagged ingredient${hiddenCount > 1 ? 's' : ''}`
+
+  // Check if all low risk
+  if (!isHighSugar && !isHighSatFat && !isHighSodium) {
+    if (hiddenCount === 0) {
+      return `Low Risk: ${calcs.sugarTeaspoons} tsp sugar, no flagged ingredients.`
+    }
+    return `Moderate Risk: ${calcs.sugarTeaspoons} tsp sugar and ${flaggedText}.`
+  }
+
+  // Determine prefix based on worst nutrient
+  let prefix = 'High Sugar'
+  if (isHighSugar && isHighSatFat) {
+    prefix = 'High Sugar & Fat'
+  } else if (isHighSatFat) {
+    prefix = 'High Saturated Fat'
+  } else if (isHighSodium) {
+    prefix = 'High Sodium'
+  }
+
+  let detail = ''
+  if (isHighSugar) {
+    detail = `${calcs.sugarTeaspoons} tsp added sugar`
+  } else if (isHighSatFat) {
+    detail = `${calcs.satFatGrams}g sat fat`
+  } else if (isHighSodium) {
+    detail = `${calcs.sodiumMg}mg sodium`
+  }
+
+  return `${prefix}: ${detail} and ${flaggedText}.`
+}
+
 function calculateNutrients(
   productData: ProductAnalysis,
   limits: { sugar: number; satFat: number; sodium: number }
@@ -149,6 +237,17 @@ export function StepResults({
   const calcsA = calculateNutrients(productA, limits)
   const calcsB = productB ? calculateNutrients(productB, limits) : null
 
+  // Whole Pack sugar teaspoons
+  const wholePackTeaspoonsA = calculateWholePackTeaspoons(productA, calcsA.sugarGrams)
+  const wholePackTeaspoonsB = productB && calcsB ? calculateWholePackTeaspoons(productB, calcsB.sugarGrams) : null
+
+  // One-Glance Summaries
+  const hiddenCountA = productA.hidden_ingredients?.length || 0
+  const oneGlanceSummaryA = generateOneGlanceSummary(calcsA, hiddenCountA)
+
+  const hiddenCountB = productB?.hidden_ingredients?.length || 0
+  const oneGlanceSummaryB = calcsB ? generateOneGlanceSummary(calcsB, hiddenCountB) : ''
+
   // Execute add to profile plate
   const performAddToPlate = (
     productName: string,
@@ -264,7 +363,7 @@ export function StepResults({
       {/* RESULTS DISPLAY: 2-COLUMN SIDE-BY-SIDE COMPARE OR SINGLE SCAN */}
       {isCompareMode && productB && calcsB ? (
         <div className="flex flex-col gap-4">
-          {/* Side-by-Side 2-Column Split: Fits on single mobile screen without scrolling */}
+          {/* Side-by-Side 2-Column Split */}
           <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full items-stretch">
             {/* Left Column: Product A */}
             <CompareProductColumn
@@ -274,6 +373,8 @@ export function StepResults({
               calcs={calcsA}
               limits={limits}
               profileName={profileName}
+              summary={oneGlanceSummaryA}
+              wholePackTsp={wholePackTeaspoonsA}
               onAddToPlate={(name, sugar, fat, sodium, serving) =>
                 handleRequestAddToPlate(name, sugar, fat, sodium, serving)
               }
@@ -287,6 +388,8 @@ export function StepResults({
               calcs={calcsB}
               limits={limits}
               profileName={profileName}
+              summary={oneGlanceSummaryB}
+              wholePackTsp={wholePackTeaspoonsB}
               onAddToPlate={(name, sugar, fat, sodium, serving) =>
                 handleRequestAddToPlate(name, sugar, fat, sodium, serving)
               }
@@ -319,7 +422,7 @@ export function StepResults({
         </div>
       ) : (
         /* Single Scan Results */
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           {(productA.product || productA.serving_size) && (
             <div className="flex flex-col items-center gap-2">
               {productA.product && productA.product !== 'Unknown' && (
@@ -335,13 +438,23 @@ export function StepResults({
             </div>
           )}
 
+          {/* Verdict Banner */}
           <VerdictStamp verdict={calcsA.dynamicVerdict} />
 
+          {/* Bold One-Glance Summary (Right under Verdict Banner) */}
+          <div className="rounded-2xl border-3 border-toy-ink bg-white/95 px-4 py-2.5 text-center shadow-[0_3px_0_0_var(--toy-ink)]">
+            <p className="font-display text-sm sm:text-base font-bold text-toy-ink leading-snug">
+              {oneGlanceSummaryA}
+            </p>
+          </div>
+
+          {/* Sugar Jar with Whole Pack view if net weight exists */}
           <SugarBottle
             percentage={calcsA.sugarPct}
             teaspoons={calcsA.sugarTeaspoons}
             grams={calcsA.sugarGrams}
             limitG={limits.sugar}
+            wholePackTeaspoons={wholePackTeaspoonsA}
           />
 
           <div className="grid grid-cols-2 gap-4">
@@ -581,6 +694,8 @@ function CompareProductColumn({
   calcs,
   limits,
   profileName,
+  summary,
+  wholePackTsp,
   onAddToPlate,
 }: {
   tag: string
@@ -589,6 +704,8 @@ function CompareProductColumn({
   calcs: ReturnType<typeof calculateNutrients>
   limits: { sugar: number; satFat: number; sodium: number }
   profileName: string
+  summary: string
+  wholePackTsp: number | null
   onAddToPlate: (
     name: string,
     sugarG: number,
@@ -622,6 +739,11 @@ function CompareProductColumn({
         {/* Compact Verdict Badge at top of column */}
         <CompactVerdictBadge verdict={calcs.dynamicVerdict} />
 
+        {/* Dynamic One-Glance Summary for this Product */}
+        <p className="font-display text-[10px] font-bold text-toy-ink leading-tight text-balance bg-[#fefcf3] p-1.5 rounded-lg border border-toy-ink/30">
+          {summary}
+        </p>
+
         {productData.serving_size && (
           <span className="text-[9px] sm:text-[10px] font-semibold text-muted-foreground truncate">
             Serving: {productData.serving_size}
@@ -638,6 +760,11 @@ function CompareProductColumn({
           pct={calcs.sugarPct}
           delay={0.1}
         />
+        {wholePackTsp != null && wholePackTsp > 0 && (
+          <div className="text-[9px] font-bold text-toy-red text-right -mt-1">
+            Whole Pack: {wholePackTsp} tsp
+          </div>
+        )}
 
         <CompactNutrientBar
           icon="🧈"
