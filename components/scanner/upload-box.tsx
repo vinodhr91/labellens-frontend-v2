@@ -1,5 +1,6 @@
 'use client'
 
+import { motion } from 'framer-motion'
 import { Camera, ImageIcon, ImagePlus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -74,9 +75,50 @@ export function UploadBox({
       </div>
 
       {value ? (
-        <div className="overflow-hidden rounded-[1.4rem] border-4 border-toy-ink">
+        <div className="relative overflow-hidden rounded-[1.4rem] border-4 border-toy-ink bg-slate-900/5">
           {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
-          <img src={value.url} alt={`${label} preview`} className="h-56 w-full object-cover" />
+          <img
+            src={value.url}
+            alt={`${label} preview`}
+            className={cn(
+              'h-56 w-full object-cover transition-opacity duration-300',
+              isScanning ? 'opacity-70' : 'opacity-100'
+            )}
+          />
+
+          {isScanning && (
+            <>
+              {/* Animated horizontal laser beam continuously moving up and down */}
+              <motion.div
+                className="absolute left-0 right-0 h-1.5 bg-gradient-to-r from-transparent via-toy-orange to-transparent shadow-[0_0_14px_4px_rgba(255,107,0,0.85)] z-10 pointer-events-none"
+                initial={{ top: '2%' }}
+                animate={{ top: ['2%', '96%', '2%'] }}
+                transition={{
+                  duration: 2.2,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                }}
+              />
+              {/* Subtle pulsing scanner glow */}
+              <motion.div
+                className="absolute inset-0 bg-toy-orange/10 pointer-events-none z-[5]"
+                animate={{ opacity: [0.08, 0.22, 0.08] }}
+                transition={{
+                  duration: 2.2,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                }}
+              />
+              {/* Active AI Reading badge */}
+              <div className="absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1.5 rounded-full border-2 border-toy-ink bg-toy-yellow/95 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-toy-ink shadow-[0_1.5px_0_0_var(--toy-ink)]">
+                <span className="relative flex size-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-toy-red opacity-75"></span>
+                  <span className="relative inline-flex rounded-full size-2 bg-toy-red"></span>
+                </span>
+                <span>AI Reading Label</span>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center gap-2 rounded-[1.4rem] border-4 border-dashed border-toy-ink/40 bg-[#eef8ff] px-4 py-6 text-center">
