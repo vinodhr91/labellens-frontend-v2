@@ -2,11 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, ArrowLeft, ChevronDown, Loader2, ScanLine, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronDown, Loader2, Plus, ScanLine, X } from 'lucide-react'
 import { API_URL, isFemaleGender, type AgeGroup, type AnalysisResult, type Gender } from '@/lib/scanner'
-import { getStoredProfiles, getActiveProfileName, setActiveProfileName, type Profile } from '@/lib/storage'
+import {
+  getStoredProfiles,
+  getActiveProfileName,
+  setActiveProfileName,
+  clearTodayPlate,
+  updateStoredProfile,
+  type Profile,
+} from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { UploadBox, type PickedImage } from './upload-box'
+import { PaywallModal } from './paywall-modal'
 
 const HEALTH_FACTS = [
   'Why track only Sugar, Fat, and Sodium? Because WHO/ICMR identifies these as the Big 3 hidden dangers in ultra-processed foods.',
@@ -81,7 +89,62 @@ export function StepUpload({
 
   // Profile selector and warning modals
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [modalMode, setModalMode] = useState<'list' | 'edit'>('list')
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [showResetCautionModal, setShowResetCautionModal] = useState(false)
   const [pendingProfileSwitch, setPendingProfileSwitch] = useState<Profile | null>(null)
+
+  // Edit profile form state
+  const [editName, setEditName] = useState(currentProfileName)
+  const [editGender, setEditGender] = useState<Gender>(gender)
+  const [editAgeGroup, setEditAgeGroup] = useState<AgeGroup>(ageGroup)
+
+  const handleAttemptSaveProfile = () => {
+    const active =
+      storedProfiles.find((p) => p.name.toLowerCase() === currentProfileName.toLowerCase()) ||
+      storedProfiles[0]
+
+    const targetGender = active?.gender || gender
+    const targetAge = active?.age_group || ageGroup
+
+    const genderChanged = editGender.toLowerCase() !== targetGender.toLowerCase()
+    const ageGroupChanged = editAgeGroup !== targetAge
+
+    if (genderChanged || ageGroupChanged) {
+      setShowResetCautionModal(true)
+    } else {
+      executeSaveProfile(false)
+    }
+  }
+
+  const executeSaveProfile = (resetPlate: boolean) => {
+    const trimmedName = editName.trim() || currentProfileName
+    const updated = {
+      name: trimmedName,
+      gender: editGender,
+      age_group: editAgeGroup,
+    }
+
+    const res = updateStoredProfile(currentProfileName, updated)
+    if (res.success && res.profile) {
+      if (resetPlate) {
+        clearTodayPlate(currentProfileName)
+        if (trimmedName.toLowerCase() !== currentProfileName.toLowerCase()) {
+          clearTodayPlate(trimmedName)
+        }
+      }
+      onProfileChange?.({
+        name: res.profile.name,
+        gender: res.profile.gender as Gender,
+        age_group: res.profile.age_group as AgeGroup,
+      })
+      setStoredProfiles(getStoredProfiles())
+    }
+
+    setShowResetCautionModal(false)
+    setModalMode('list')
+    setShowProfileModal(false)
+  }
 
   useEffect(() => {
     setStoredProfiles(getStoredProfiles())
@@ -181,8 +244,13 @@ export function StepUpload({
           type="button"
           onClick={() => {
             if (loading) {
-              handleRequestCancelScan(() => setShowProfileModal(true))
+              handleRequestCancelScan(() => {
+                setModalMode('list')
+                setStoredProfiles(getStoredProfiles())
+                setShowProfileModal(true)
+              })
             } else {
+              setModalMode('list')
               setStoredProfiles(getStoredProfiles())
               setShowProfileModal(true)
             }
@@ -451,7 +519,10 @@ export function StepUpload({
         {showProfileModal && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
-            onClick={() => setShowProfileModal(false)}
+            onClick={() => {
+              setModalMode('list')
+              setShowProfileModal(false)
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 15 }}
@@ -464,61 +535,282 @@ export function StepUpload({
               aria-modal="true"
               aria-labelledby="profiles-modal-title"
             >
-              <div className="flex items-center justify-between pb-3 border-b-2 border-toy-ink/15">
-                <h4 id="profiles-modal-title" className="font-display text-lg font-bold text-toy-ink">
-                  Family Profiles
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => setShowProfileModal(false)}
-                  className="flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink hover:scale-105 cursor-pointer"
-                  aria-label="Close"
-                >
-                  <X className="size-4" strokeWidth={3} />
-                </button>
-              </div>
-
-              <div className="mt-3 flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
-                {storedProfiles.map((p) => {
-                  const isActive = p.name.toLowerCase() === currentProfileName.toLowerCase()
-                  return (
+              {modalMode === 'list' ? (
+                <>
+                  <div className="flex items-center justify-between pb-3 border-b-2 border-toy-ink/15">
+                    <h4 id="profiles-modal-title" className="font-display text-lg font-bold text-toy-ink">
+                      Family Profiles
+                    </h4>
                     <button
-                      key={p.id || p.name}
+                      type="button"
+                      onClick={() => setShowProfileModal(false)}
+                      className="flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink hover:scale-105 cursor-pointer"
+                      aria-label="Close"
+                    >
+                      <X className="size-4" strokeWidth={3} />
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+                    {storedProfiles.map((p) => {
+                      const isActive = p.name.toLowerCase() === currentProfileName.toLowerCase()
+                      return (
+                        <div
+                          key={p.id || p.name}
+                          className={`flex items-center justify-between rounded-xl border-3 border-toy-ink p-2.5 sm:p-3 transition-all ${
+                            isActive
+                              ? 'bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
+                              : 'bg-white text-toy-ink hover:bg-slate-50'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!isActive) {
+                                setShowProfileModal(false)
+                                setPendingProfileSwitch(p)
+                              }
+                            }}
+                            className="flex flex-1 items-center gap-3 text-left cursor-pointer min-w-0"
+                          >
+                            <span className="text-2xl shrink-0">{getProfileEmoji(p.gender, p.age_group)}</span>
+                            <div className="min-w-0">
+                              <p className="font-display text-sm font-bold leading-tight truncate">{p.name}</p>
+                              <p className="text-[11px] font-semibold text-toy-ink/70">
+                                {p.gender} · {p.age_group} yrs
+                              </p>
+                            </div>
+                          </button>
+
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            {isActive && (
+                              <>
+                                <span className="rounded-full border-2 border-toy-ink bg-white px-2 py-0.5 text-[10px] font-black uppercase text-toy-ink">
+                                  Active
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setEditName(p.name)
+                                    setEditGender((p.gender as Gender) || gender)
+                                    setEditAgeGroup((p.age_group as AgeGroup) || ageGroup)
+                                    setModalMode('edit')
+                                  }}
+                                  className="toy-press flex items-center gap-1 rounded-lg border-2 border-toy-ink bg-white px-2 py-1 text-xs font-bold text-toy-ink hover:bg-toy-yellow/30 shadow-[0_1.5px_0_0_var(--toy-ink)] cursor-pointer"
+                                  aria-label={`Edit ${p.name}`}
+                                >
+                                  <span>✏️</span>
+                                  <span>Edit</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* [ + Add Family Profile ] Button */}
+                  <div className="mt-4 pt-3 border-t-2 border-toy-ink/15">
+                    <button
                       type="button"
                       onClick={() => {
                         setShowProfileModal(false)
-                        if (!isActive) {
-                          setPendingProfileSwitch(p)
-                        }
+                        setShowPaywall(true)
                       }}
-                      className={`toy-press flex items-center justify-between rounded-xl border-3 border-toy-ink p-3 text-left transition-all cursor-pointer ${
-                        isActive
-                          ? 'bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
-                          : 'bg-white text-toy-ink hover:bg-slate-50'
-                      }`}
+                      className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-xl border-3 border-toy-ink bg-white py-2.5 text-sm font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] hover:bg-toy-yellow/20 cursor-pointer"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{getProfileEmoji(p.gender, p.age_group)}</span>
-                        <div>
-                          <p className="font-display text-sm font-bold leading-tight">{p.name}</p>
-                          <p className="text-[11px] font-semibold text-toy-ink/70">
-                            {p.gender} · {p.age_group} yrs
-                          </p>
-                        </div>
-                      </div>
-                      {isActive && (
-                        <span className="rounded-full border-2 border-toy-ink bg-white px-2 py-0.5 text-[10px] font-black uppercase text-toy-ink">
-                          Active
-                        </span>
-                      )}
+                      <Plus className="size-4 stroke-[3]" />
+                      <span>+ Add Family Profile</span>
                     </button>
-                  )
-                })}
+                  </div>
+                </>
+              ) : (
+                /* Edit Profile Form Mode */
+                <>
+                  <div className="flex items-center justify-between pb-3 border-b-2 border-toy-ink/15">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setModalMode('list')}
+                        className="flex size-7 items-center justify-center rounded-full border-2 border-toy-ink bg-white text-toy-ink hover:bg-slate-100 cursor-pointer"
+                        aria-label="Back to profiles"
+                      >
+                        <ArrowLeft className="size-4" strokeWidth={3} />
+                      </button>
+                      <h4 id="profiles-modal-title" className="font-display text-lg font-bold text-toy-ink">
+                        ✏️ Edit Profile
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalMode('list')
+                        setShowProfileModal(false)
+                      }}
+                      className="flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink hover:scale-105 cursor-pointer"
+                      aria-label="Close"
+                    >
+                      <X className="size-4" strokeWidth={3} />
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-3">
+                    {/* Live Avatar Preview */}
+                    <div className="flex items-center justify-center">
+                      <div className="flex size-14 items-center justify-center rounded-2xl border-3 border-toy-ink bg-toy-yellow shadow-[0_3px_0_0_var(--toy-ink)] text-3xl">
+                        {getProfileEmoji(editGender, editAgeGroup)}
+                      </div>
+                    </div>
+
+                    {/* Name Input */}
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="edit-profile-name" className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink">
+                        Profile Name
+                      </label>
+                      <input
+                        id="edit-profile-name"
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="e.g. My Son"
+                        maxLength={30}
+                        className="w-full rounded-xl border-3 border-toy-ink bg-[#fffef0] px-3 py-2 text-sm font-bold text-toy-ink focus:outline-none focus:ring-2 focus:ring-toy-yellow"
+                      />
+                    </div>
+
+                    {/* Gender Selector */}
+                    <div className="flex flex-col gap-1">
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink">
+                        Gender
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['Female', 'Male'] as const).map((g) => {
+                          const selected = editGender.toLowerCase() === g.toLowerCase()
+                          return (
+                            <button
+                              key={g}
+                              type="button"
+                              onClick={() => setEditGender(g)}
+                              className={`toy-press rounded-xl border-2 border-toy-ink py-2 text-xs font-bold transition-all cursor-pointer ${
+                                selected
+                                  ? 'bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] font-black'
+                                  : 'bg-white text-toy-ink/70 hover:text-toy-ink'
+                              }`}
+                            >
+                              {g === 'Female' ? '👧 Female' : '👦 Male'}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Age Group Selector */}
+                    <div className="flex flex-col gap-1">
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink">
+                        Age Group
+                      </label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(['1-3', '4-6', '7-9', '10+'] as const).map((age) => {
+                          const selected = editAgeGroup === age
+                          return (
+                            <button
+                              key={age}
+                              type="button"
+                              onClick={() => setEditAgeGroup(age)}
+                              className={`toy-press rounded-xl border-2 border-toy-ink py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                                selected
+                                  ? 'bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] font-black'
+                                  : 'bg-white text-toy-ink/70 hover:text-toy-ink'
+                              }`}
+                            >
+                              {age === '10+' ? '10+ yrs' : `${age} yrs`}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Save Changes & Cancel */}
+                    <div className="mt-2 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAttemptSaveProfile}
+                        className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-xl border-3 border-toy-ink bg-toy-yellow py-2.5 text-sm font-bold text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)] hover:brightness-105 cursor-pointer"
+                      >
+                        💾 Save Changes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalMode('list')}
+                        className="w-full text-center text-xs font-bold text-toy-ink/65 hover:text-toy-ink py-1 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Reset Daily Plate Caution Confirmation Modal */}
+      <AnimatePresence>
+        {showResetCautionModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
+            onClick={() => setShowResetCautionModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 25 }}
+              className="toy-block relative w-full max-w-sm bg-white p-6 shadow-2xl text-left"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="reset-caution-title"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-toy-orange text-white shadow-[0_2px_0_0_var(--toy-ink)]">
+                  <AlertTriangle className="size-6" strokeWidth={2.5} />
+                </span>
+                <h4 id="reset-caution-title" className="font-display text-xl font-bold text-toy-ink">
+                  Reset Daily Plate?
+                </h4>
+              </div>
+
+              <p className="mt-4 text-sm sm:text-base font-semibold leading-relaxed text-toy-ink text-pretty">
+                Changing age or gender will reset today&apos;s Daily Plate because your daily limits are changing. Continue?
+              </p>
+
+              <div className="mt-6 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => executeSaveProfile(true)}
+                  className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-xl border-3 border-toy-ink bg-toy-yellow py-3 text-base font-bold text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)] hover:brightness-105 cursor-pointer"
+                >
+                  Continue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowResetCautionModal(false)}
+                  className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-xl border-3 border-toy-ink bg-white py-3 text-sm font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* Pro Paywall Modal for + Add Family Profile */}
+      <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
 
       {/* Profile Switch Warning Modal */}
       <AnimatePresence>

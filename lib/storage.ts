@@ -106,6 +106,70 @@ export function setActiveProfileName(name: string): void {
   }
 }
 
+export function updateStoredProfile(
+  oldName: string,
+  updated: { name: string; gender: string; age_group: string }
+): { success: boolean; profile?: Profile } {
+  if (typeof window === 'undefined') return { success: false }
+  const profiles = getStoredProfiles()
+  const index = profiles.findIndex((p) => p.name.toLowerCase() === oldName.toLowerCase())
+  if (index === -1) {
+    if (profiles.length > 0) {
+      const p = profiles[0]
+      const newP: Profile = {
+        ...p,
+        name: updated.name.trim() || p.name,
+        gender: updated.gender,
+        age_group: updated.age_group,
+      }
+      const updatedList = [newP, ...profiles.slice(1)]
+      try {
+        localStorage.setItem(PROFILES_KEY, JSON.stringify(updatedList))
+        setActiveProfileName(newP.name)
+        return { success: true, profile: newP }
+      } catch {
+        return { success: false }
+      }
+    }
+    return { success: false }
+  }
+
+  const target = profiles[index]
+  const newProfile: Profile = {
+    ...target,
+    name: updated.name.trim() || target.name,
+    gender: updated.gender,
+    age_group: updated.age_group,
+  }
+
+  const updatedProfiles = [...profiles]
+  updatedProfiles[index] = newProfile
+
+  try {
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(updatedProfiles))
+    const activeName = getActiveProfileName()
+    if (activeName.toLowerCase() === oldName.toLowerCase()) {
+      setActiveProfileName(newProfile.name)
+    }
+
+    // If the name changed, migrate plate items to the new name
+    if (oldName.toLowerCase() !== newProfile.name.toLowerCase()) {
+      const plateItems = getStoredPlateItems()
+      const migratedPlate = plateItems.map((item) => {
+        if (item.profile_name && item.profile_name.toLowerCase() === oldName.toLowerCase()) {
+          return { ...item, profile_name: newProfile.name }
+        }
+        return item
+      })
+      localStorage.setItem(PLATE_KEY, JSON.stringify(migratedPlate))
+    }
+
+    return { success: true, profile: newProfile }
+  } catch {
+    return { success: false }
+  }
+}
+
 // ---------------- Today's Plate (Per Profile) ---------------- //
 
 export function getStoredPlateItems(): PlateItem[] {
