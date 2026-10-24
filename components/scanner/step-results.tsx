@@ -210,6 +210,28 @@ function calculateNutrients(
   }
 }
 
+function buildWhatsAppShareUrl(
+  productData: ProductAnalysis,
+  calcs: { sugarTeaspoons: number; sugarPct: number; satFatPct: number; sodiumPct: number },
+  demographic: string
+): string {
+  const rawName = (productData.product || '').trim()
+  const isUnknown = !rawName || rawName.toLowerCase() === 'unknown'
+  const shareProductName = isUnknown ? 'a packaged food item' : rawName
+
+  let worstMetricText = ''
+  if (calcs.satFatPct > calcs.sugarPct && calcs.satFatPct >= calcs.sodiumPct) {
+    worstMetricText = `It has ${calcs.satFatPct}% of a ${demographic}'s daily saturated fat limit.`
+  } else if (calcs.sodiumPct > calcs.sugarPct && calcs.sodiumPct > calcs.satFatPct) {
+    worstMetricText = `It has ${calcs.sodiumPct}% of a ${demographic}'s daily sodium limit.`
+  } else {
+    worstMetricText = `It has ${calcs.sugarTeaspoons} teaspoons of sugar, which is ${calcs.sugarPct}% of a ${demographic}'s daily limit.`
+  }
+
+  const shareText = `I just scanned ${shareProductName} on LabelLens. ${worstMetricText} Check your kitchen here: https://foodlabel-lens.vercel.app/`
+  return `https://wa.me/?text=${encodeURIComponent(shareText)}`
+}
+
 export function StepResults({
   result,
   profileName: initialProfileName,
@@ -281,10 +303,8 @@ export function StepResults({
   const hiddenCountB = productB?.hidden_ingredients?.length || 0
   const oneGlanceSummaryB = calcsB ? generateOneGlanceSummary(calcsB, hiddenCountB) : ''
 
-  // WhatsApp Share Link
-  const shareProductName = productA.product || 'Food Product'
-  const shareText = `I just scanned ${shareProductName} on LabelLens. It has ${calcsA.sugarTeaspoons} teaspoons of sugar, which is ${calcsA.sugarPct}% of a ${limits.name}'s daily limit. Check your kitchen here: https://foodlabel-lens.vercel.app/`
-  const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
+  // WhatsApp Share Link (Intelligent Fallback Name & Worst Metric Highlighting)
+  const whatsappShareUrl = buildWhatsAppShareUrl(productA, calcsA, limits.name)
 
   // "How Much Did You Eat?" portion modal state
   const [portionModal, setPortionModal] = useState<{
