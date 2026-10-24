@@ -313,9 +313,9 @@ export function StepUpload({
         </div>
       )}
 
-      {/* Unified Scan Action & Loading Carousel Container */}
+      {/* Unified Scan Action with Loading Carousel inside the Scan button area */}
       <div className="flex flex-col gap-3">
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-stretch">
           <ToyButton
             variant="white"
             onClick={() => {
@@ -326,39 +326,15 @@ export function StepUpload({
               }
             }}
             aria-label="Back"
-            className="px-4"
+            className="px-4 self-stretch flex items-center justify-center"
           >
             <ArrowLeft className="size-7" strokeWidth={3} aria-hidden="true" />
           </ToyButton>
-          <ToyButton onClick={handleScan} disabled={!canScan} className="flex-1 py-5 text-xl sm:text-2xl">
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <ScanLine className="size-7 animate-pulse" strokeWidth={3} aria-hidden="true" />
-                Scanning…
-              </span>
-            ) : scanMode === 'compare' ? (
-              <span className="flex items-center justify-center gap-2">
-                <span>⚖️</span>
-                <span>Compare Products</span>
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2">
-                <ScanLine className="size-7" strokeWidth={3} aria-hidden="true" />
-                <span>Scan</span>
-              </span>
-            )}
-          </ToyButton>
-        </div>
 
-        {/* Loading Carousel: Positioned right under the scanning animation */}
-        <AnimatePresence>
-          {loading && (
-            <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 350, damping: 26 }}
-              className="toy-block bg-toy-yellow/20 border-4 border-toy-ink p-4 flex flex-col items-center gap-2.5 text-center shadow-[0_4px_0_0_var(--toy-ink)]"
+          {loading ? (
+            /* Randomized "Did You Know?" fact carousel directly inside the scanning animation / scan button area */
+            <div
+              className="toy-block flex-1 bg-[#fffbe6] border-4 border-toy-ink p-3 sm:p-4 flex flex-col items-center gap-2 text-center shadow-[0_4px_0_0_var(--toy-ink)]"
               aria-live="polite"
             >
               <div className="flex items-center gap-2">
@@ -366,36 +342,50 @@ export function StepUpload({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-toy-orange opacity-75"></span>
                   <span className="relative inline-flex rounded-full size-2.5 bg-toy-orange"></span>
                 </span>
-                <span className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink/80">
+                <span className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink">
                   {scanMode === 'compare' ? 'Comparing Both Products with AI…' : 'Scanning Food Label with AI…'}
                 </span>
               </div>
 
-              <div className="inline-flex items-center gap-1.5 rounded-full border-2 border-toy-ink bg-toy-yellow px-3 py-0.5 text-xs font-black uppercase tracking-wider text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]">
+              <div className="inline-flex items-center gap-1.5 rounded-full border-2 border-toy-ink bg-toy-yellow px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider text-toy-ink shadow-[0_1.5px_0_0_var(--toy-ink)]">
                 <span>💡</span> Did You Know?
               </div>
 
-              <div className="relative min-h-[85px] w-full flex items-center justify-center overflow-hidden">
+              <div className="relative min-h-[64px] sm:min-h-[70px] w-full flex items-center justify-center overflow-hidden">
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={factIndex}
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
+                    exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.45, ease: 'easeInOut' }}
-                    className="font-display text-base sm:text-lg font-bold text-toy-ink leading-snug px-2"
+                    className="font-display text-xs sm:text-sm font-bold text-toy-ink leading-snug px-1 text-balance"
                   >
                     &ldquo;{shuffledFacts[factIndex]}&rdquo;
                   </motion.p>
                 </AnimatePresence>
               </div>
 
-              <p className="text-[11px] font-semibold text-toy-ink/70">
+              <p className="text-[10px] font-semibold text-toy-ink/70">
                 Analyzing label…
               </p>
-            </motion.div>
+            </div>
+          ) : (
+            <ToyButton onClick={handleScan} disabled={!canScan} className="flex-1 py-5 text-xl sm:text-2xl">
+              {scanMode === 'compare' ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span>⚖️</span>
+                  <span>Compare Products</span>
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <ScanLine className="size-7" strokeWidth={3} aria-hidden="true" />
+                  <span>Scan</span>
+                </span>
+              )}
+            </ToyButton>
           )}
-        </AnimatePresence>
+        </div>
       </div>
 
       {/* Cancellation Confirmation Modal */}

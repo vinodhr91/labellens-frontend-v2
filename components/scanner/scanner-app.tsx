@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Camera, ScanLine, UtensilsCrossed } from 'lucide-react'
+import { Home, ScanLine, UtensilsCrossed } from 'lucide-react'
 import type { AgeGroup, AnalysisResult, Gender } from '@/lib/scanner'
 import { getActiveProfile, getActiveProfileName, getStoredProfiles, getTodayPlateItems } from '@/lib/storage'
 import { StepOnboarding } from './step-onboarding'
@@ -51,7 +51,7 @@ export function ScannerApp() {
   }, [])
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pb-28 pt-6">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pb-32 pt-6">
       {/* Top App Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -150,8 +150,8 @@ export function ScannerApp() {
       {hasLockedFirstProfile && (step > 1 || activeTab === 'plate') && (
         <nav
           aria-label="Bottom Navigation"
-          className={`fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4 transition-all duration-200 ${
-            isScanning ? 'opacity-40 pointer-events-none' : ''
+          className={`fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4 transition-all duration-300 ${
+            isScanning ? 'opacity-0 pointer-events-none translate-y-16' : 'opacity-100 translate-y-0'
           }`}
         >
           <div className="toy-block flex items-center justify-around border-3 bg-white/95 p-1.5 shadow-[0_4px_0_0_var(--toy-ink)] backdrop-blur-md">
@@ -167,8 +167,8 @@ export function ScannerApp() {
                   : 'text-toy-ink/65 hover:text-toy-ink'
               }`}
             >
-              <Camera className="size-4 stroke-[2.5]" />
-              <span>📷 Scan</span>
+              <Home className="size-4 stroke-[2.5]" />
+              <span>Home</span>
             </button>
 
             <button
