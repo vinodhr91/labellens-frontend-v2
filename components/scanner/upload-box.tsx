@@ -11,12 +11,16 @@ export function UploadBox({
   hint,
   value,
   onChange,
+  isScanning = false,
+  onRequestCancelScan,
 }: {
   id: string
   label: string
   hint: string
   value: PickedImage | null
   onChange: (v: PickedImage | null) => void
+  isScanning?: boolean
+  onRequestCancelScan?: (onConfirm: () => void) => void
 }) {
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.currentTarget
@@ -28,6 +32,24 @@ export function UploadBox({
       input.value = ''
     }
     reader.readAsDataURL(file)
+  }
+
+  function handleRemove() {
+    if (isScanning && onRequestCancelScan) {
+      onRequestCancelScan(() => onChange(null))
+    } else {
+      onChange(null)
+    }
+  }
+
+  function handlePickClick(e: React.MouseEvent, inputId: string) {
+    if (isScanning && onRequestCancelScan) {
+      e.preventDefault()
+      onRequestCancelScan(() => {
+        const el = document.getElementById(inputId) as HTMLInputElement | null
+        el?.click()
+      })
+    }
   }
 
   return (
@@ -42,7 +64,7 @@ export function UploadBox({
         {value && (
           <button
             type="button"
-            onClick={() => onChange(null)}
+            onClick={handleRemove}
             className="flex size-10 shrink-0 items-center justify-center rounded-full border-[3px] border-toy-ink bg-white text-toy-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-toy-yellow"
             aria-label={`Remove ${label} photo`}
           >
@@ -64,7 +86,11 @@ export function UploadBox({
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <PickButton htmlFor={`${id}-camera`} color="bg-toy-yellow text-toy-ink">
+        <PickButton
+          htmlFor={`${id}-camera`}
+          color="bg-toy-yellow text-toy-ink"
+          onClick={(e) => handlePickClick(e, `${id}-camera`)}
+        >
           <Camera className="size-6 shrink-0" strokeWidth={3} aria-hidden="true" />
           {value ? 'Retake' : 'Take Photo'}
           <input
@@ -76,7 +102,11 @@ export function UploadBox({
             onChange={handleFile}
           />
         </PickButton>
-        <PickButton htmlFor={id} color="bg-white text-toy-ink">
+        <PickButton
+          htmlFor={id}
+          color="bg-white text-toy-ink"
+          onClick={(e) => handlePickClick(e, id)}
+        >
           <ImagePlus className="size-6 shrink-0" strokeWidth={3} aria-hidden="true" />
           {value ? 'Change' : 'Upload from Gallery'}
           <input id={id} type="file" accept="image/*" className="sr-only" onChange={handleFile} />
@@ -91,14 +121,17 @@ function PickButton({
   htmlFor,
   color,
   children,
+  onClick,
 }: {
   htmlFor: string
   color: string
   children: React.ReactNode
+  onClick?: (e: React.MouseEvent) => void
 }) {
   return (
     <label
       htmlFor={htmlFor}
+      onClick={onClick}
       className={cn(
         'toy-press font-display flex min-h-16 cursor-pointer items-center justify-center gap-2 rounded-2xl border-4 border-toy-ink px-3 py-2 text-center text-base font-bold leading-tight',
         'focus-within:ring-4 focus-within:ring-toy-yellow',

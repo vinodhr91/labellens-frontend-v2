@@ -22,6 +22,7 @@ export function ScannerApp() {
   const [profileName, setProfileName] = useState<string>('')
   const [plateCount, setPlateCount] = useState(0)
   const [hasLockedFirstProfile, setHasLockedFirstProfile] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
 
   // Sync active profile and plate items count
   const syncData = () => {
@@ -111,11 +112,19 @@ export function ScannerApp() {
               <StepUpload
                 gender={gender}
                 ageGroup={ageGroup}
+                profileName={profileName}
+                onProfileChange={(newProf) => {
+                  setProfileName(newProf.name)
+                  setGender(newProf.gender)
+                  setAgeGroup(newProf.age_group)
+                  syncData()
+                }}
                 onBack={() => setStep(1)}
                 onResult={(data) => {
                   setResult(data)
                   setStep(3)
                 }}
+                onLoadingChange={setIsScanning}
               />
             )}
             {step === 3 && result && (
@@ -141,13 +150,18 @@ export function ScannerApp() {
       {hasLockedFirstProfile && (step > 1 || activeTab === 'plate') && (
         <nav
           aria-label="Bottom Navigation"
-          className="fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4"
+          className={`fixed bottom-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4 transition-all duration-200 ${
+            isScanning ? 'opacity-40 pointer-events-none' : ''
+          }`}
         >
           <div className="toy-block flex items-center justify-around border-3 bg-white/95 p-1.5 shadow-[0_4px_0_0_var(--toy-ink)] backdrop-blur-md">
             <button
               type="button"
-              onClick={() => setActiveTab('scanner')}
-              className={`font-display flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
+              disabled={isScanning}
+              onClick={() => !isScanning && setActiveTab('scanner')}
+              className={`font-display flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all ${
+                isScanning ? 'cursor-not-allowed' : 'cursor-pointer'
+              } ${
                 activeTab === 'scanner'
                   ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
                   : 'text-toy-ink/65 hover:text-toy-ink'
@@ -159,11 +173,15 @@ export function ScannerApp() {
 
             <button
               type="button"
+              disabled={isScanning}
               onClick={() => {
+                if (isScanning) return
                 syncData()
                 setActiveTab('plate')
               }}
-              className={`font-display relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all cursor-pointer ${
+              className={`font-display relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all ${
+                isScanning ? 'cursor-not-allowed' : 'cursor-pointer'
+              } ${
                 activeTab === 'plate'
                   ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
                   : 'text-toy-ink/65 hover:text-toy-ink'

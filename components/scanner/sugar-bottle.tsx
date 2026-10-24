@@ -52,7 +52,7 @@ export function SugarBottle({
           )}
           {wholePackTeaspoons != null && wholePackTeaspoons > 0 && (
             <span className="font-display mt-1 text-xs sm:text-sm font-bold text-toy-ink">
-              Whole Pack: <strong className="text-toy-red font-black">{wholePackTeaspoons} teaspoons</strong>
+              Whole Pack: <strong className="text-toy-red font-black">{wholePackTeaspoons} tsp</strong>
             </span>
           )}
           <span className="mt-3 text-sm font-semibold text-muted-foreground">

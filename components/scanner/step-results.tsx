@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, Check, CheckCircle2, RotateCcw, Utensils, Users, X } from 'lucide-react'
+import { Check, CheckCircle2, RotateCcw, Utensils, Users, X } from 'lucide-react'
 import { findMetric, toNumber, type AnalysisResult, type ProductAnalysis } from '@/lib/scanner'
 import { addProductToProfilePlate, getActiveProfile, getActiveProfileName } from '@/lib/storage'
 import { ToyButton } from './toy-button'
@@ -43,27 +43,64 @@ function parseGramsOrMl(str: string | undefined): number | null {
   return !isNaN(numOnly) && numOnly > 0 ? numOnly : null
 }
 
-function calculateWholePackTeaspoons(
+function calculateWholePackMetrics(
   productData: ProductAnalysis,
-  sugarGramsPerServing: number
-): number | null {
+  calcs: { sugarGrams: number; satFatGrams: number; sodiumMg: number }
+): {
+  servings: number
+  sugarTsp: number
+  satFatGrams: number
+  sodiumMg: number
+} | null {
+  const p = productData as Record<string, unknown>
+  let servings: number | null = null
+
+  const directServings = toNumber(p.servings_per_pack || p.total_servings || p.servings)
+  if (directServings > 1) {
+    servings = directServings
+  } else {
+    const netWeightStr = String(p.net_weight || p.net_quantity || p.pack_weight || p.weight || '').trim()
+    const servingSizeStr = String(p.serving_size || '').trim()
+
+    if (netWeightStr && netWeightStr.toLowerCase() !== 'unknown') {
+      const netWeightNum = parseGramsOrMl(netWeightStr)
+      const servingSizeNum = parseGramsOrMl(servingSizeStr)
+      if (netWeightNum && servingSizeNum && servingSizeNum > 0 && netWeightNum > servingSizeNum) {
+        servings = netWeightNum / servingSizeNum
+      }
+    }
+  }
+
+  if (!servings || servings <= 1) return null
+
+  const sugarTsp = Math.round(((calcs.sugarGrams / 4.0) * servings) * 10) / 10
+  const satFatGrams = Math.round((calcs.satFatGrams * servings) * 10) / 10
+  const sodiumMg = Math.round(calcs.sodiumMg * servings)
+
+  return {
+    servings: Math.round(servings * 10) / 10,
+    sugarTsp,
+    satFatGrams,
+    sodiumMg,
+  }
+}
+
+function getProductTotalServings(productData: ProductAnalysis): number | null {
   const p = productData as Record<string, unknown>
   const directServings = toNumber(p.servings_per_pack || p.total_servings || p.servings)
   if (directServings > 1) {
-    const tspPerServing = sugarGramsPerServing / 4.0
-    return Math.round(tspPerServing * directServings * 10) / 10
+    return Math.round(directServings * 10) / 10
   }
 
-  const netWeightStr = String(p.net_weight || p.net_quantity || p.pack_weight || p.weight || '')
-  const servingSizeStr = String(p.serving_size || '')
+  const netWeightStr = String(p.net_weight || p.net_quantity || p.pack_weight || p.weight || '').trim()
+  const servingSizeStr = String(p.serving_size || '').trim()
 
-  const netWeightNum = parseGramsOrMl(netWeightStr)
-  const servingSizeNum = parseGramsOrMl(servingSizeStr)
-
-  if (netWeightNum && servingSizeNum && servingSizeNum > 0 && netWeightNum > servingSizeNum) {
-    const servings = netWeightNum / servingSizeNum
-    const tspPerServing = sugarGramsPerServing / 4.0
-    return Math.round(tspPerServing * servings * 10) / 10
+  if (netWeightStr && netWeightStr.toLowerCase() !== 'unknown') {
+    const netWeightNum = parseGramsOrMl(netWeightStr)
+    const servingSizeNum = parseGramsOrMl(servingSizeStr)
+    if (netWeightNum && servingSizeNum && servingSizeNum > 0 && netWeightNum > servingSizeNum) {
+      return Math.round((netWeightNum / servingSizeNum) * 10) / 10
+    }
   }
 
   return null
@@ -90,12 +127,12 @@ function generateOneGlanceSummary(
       ? 'no flagged ingredients'
       : `${hiddenCount} flagged ingredient${hiddenCount > 1 ? 's' : ''}`
 
-  // Check if all low risk
+  // Check if all metrics are under 25% (Within Limits)
   if (!isHighSugar && !isHighSatFat && !isHighSodium) {
     if (hiddenCount === 0) {
-      return `Low Risk: ${calcs.sugarTeaspoons} tsp sugar, no flagged ingredients.`
+      return `Within Daily Limits: ${calcs.sugarTeaspoons} tsp sugar, no flagged ingredients.`
     }
-    return `Moderate Risk: ${calcs.sugarTeaspoons} tsp sugar and ${flaggedText}.`
+    return `Within Daily Limits: ${calcs.sugarTeaspoons} tsp sugar and ${flaggedText}.`
   }
 
   // Determine prefix based on worst nutrient
@@ -156,7 +193,7 @@ function calculateNutrients(
   } else if (maxPct > 100) {
     dynamicVerdict = '🚨 EXCEEDS DAILY LIMITS'
   } else if (maxPct >= 25) {
-    dynamicVerdict = '⚠️ MODERATE LEVELS'
+    dynamicVerdict = '⚠️ HIGH LEVELS DETECTED'
   } else {
     dynamicVerdict = '✅ WITHIN DAILY LIMITS'
   }
@@ -215,15 +252,8 @@ export function StepResults({
     ? `Breakdown for: ${limits.name} (What-If)`
     : `Breakdown for: ${profileName}`
 
-  // Toast and Mismatch modal state
+  // Toast message
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [pendingAdd, setPendingAdd] = useState<{
-    name: string
-    sugarG: number
-    satFatG: number
-    sodiumMg: number
-    servingSize?: string
-  } | null>(null)
 
   // Single scan added state
   const [singleAdded, setSingleAdded] = useState(false)
@@ -237,9 +267,12 @@ export function StepResults({
   const calcsA = calculateNutrients(productA, limits)
   const calcsB = productB ? calculateNutrients(productB, limits) : null
 
-  // Whole Pack sugar teaspoons
-  const wholePackTeaspoonsA = calculateWholePackTeaspoons(productA, calcsA.sugarGrams)
-  const wholePackTeaspoonsB = productB && calcsB ? calculateWholePackTeaspoons(productB, calcsB.sugarGrams) : null
+  // Whole Pack metrics for all nutrients
+  const wholePackA = calculateWholePackMetrics(productA, calcsA)
+  const wholePackB = productB && calcsB ? calculateWholePackMetrics(productB, calcsB) : null
+
+  const totalServingsA = getProductTotalServings(productA)
+  const totalServingsB = productB ? getProductTotalServings(productB) : null
 
   // One-Glance Summaries
   const hiddenCountA = productA.hidden_ingredients?.length || 0
@@ -247,6 +280,16 @@ export function StepResults({
 
   const hiddenCountB = productB?.hidden_ingredients?.length || 0
   const oneGlanceSummaryB = calcsB ? generateOneGlanceSummary(calcsB, hiddenCountB) : ''
+
+  // "How Much Did You Eat?" portion modal state
+  const [portionModal, setPortionModal] = useState<{
+    productName: string
+    servingSize?: string
+    sugarGrams: number
+    satFatGrams: number
+    sodiumMg: number
+    totalServings: number | null
+  } | null>(null)
 
   // Execute add to profile plate
   const performAddToPlate = (
@@ -271,19 +314,45 @@ export function StepResults({
     }
   }
 
-  // Trigger add to plate with mismatch check
-  const handleRequestAddToPlate = (
+  const handleOpenPortionModal = (
     productName: string,
-    sugarG: number,
-    satFatG: number,
+    sugarGrams: number,
+    satFatGrams: number,
     sodiumMg: number,
-    servingSize?: string
+    servingSize?: string,
+    totalServings?: number | null
   ) => {
-    if (selectedAgeBracket !== profileAgeBracket) {
-      setPendingAdd({ name: productName, sugarG, satFatG, sodiumMg, servingSize })
-      return
+    setPortionModal({
+      productName: productName || 'Scanned Food Product',
+      sugarGrams,
+      satFatGrams,
+      sodiumMg,
+      servingSize,
+      totalServings: totalServings && totalServings > 1 ? totalServings : null,
+    })
+  }
+
+  const handleSelectPortion = (multiplier: number, label: string) => {
+    if (!portionModal) return
+
+    const sugarG = Math.round(portionModal.sugarGrams * multiplier * 10) / 10
+    const satFatG = Math.round(portionModal.satFatGrams * multiplier * 10) / 10
+    const sodiumMg = Math.round(portionModal.sodiumMg * multiplier)
+
+    let servingDesc = label
+    if (portionModal.servingSize) {
+      servingDesc = `${label} (${portionModal.servingSize})`
     }
-    performAddToPlate(productName, sugarG, satFatG, sodiumMg, servingSize)
+
+    performAddToPlate(
+      portionModal.productName,
+      sugarG,
+      satFatG,
+      sodiumMg,
+      servingDesc
+    )
+
+    setPortionModal(null)
   }
 
   return (
@@ -372,11 +441,10 @@ export function StepResults({
               productData={productA}
               calcs={calcsA}
               limits={limits}
-              profileName={profileName}
               summary={oneGlanceSummaryA}
-              wholePackTsp={wholePackTeaspoonsA}
+              wholePack={wholePackA}
               onAddToPlate={(name, sugar, fat, sodium, serving) =>
-                handleRequestAddToPlate(name, sugar, fat, sodium, serving)
+                handleOpenPortionModal(name, sugar, fat, sodium, serving, totalServingsA)
               }
             />
 
@@ -387,11 +455,10 @@ export function StepResults({
               productData={productB}
               calcs={calcsB}
               limits={limits}
-              profileName={profileName}
               summary={oneGlanceSummaryB}
-              wholePackTsp={wholePackTeaspoonsB}
+              wholePack={wholePackB}
               onAddToPlate={(name, sugar, fat, sodium, serving) =>
-                handleRequestAddToPlate(name, sugar, fat, sodium, serving)
+                handleOpenPortionModal(name, sugar, fat, sodium, serving, totalServingsB)
               }
             />
           </div>
@@ -454,7 +521,7 @@ export function StepResults({
             teaspoons={calcsA.sugarTeaspoons}
             grams={calcsA.sugarGrams}
             limitG={limits.sugar}
-            wholePackTeaspoons={wholePackTeaspoonsA}
+            wholePackTeaspoons={wholePackA?.sugarTsp ?? null}
           />
 
           <div className="grid grid-cols-2 gap-4">
@@ -464,6 +531,7 @@ export function StepResults({
               percentage={calcsA.satFatPct}
               delay={0.15}
               detail={ratio(calcsA.satFatGrams, limits.satFat, 'g')}
+              wholePackText={wholePackA ? `Whole Pack: ${wholePackA.satFatGrams}g` : null}
             />
             <MiniMeter
               label="Sodium"
@@ -471,6 +539,7 @@ export function StepResults({
               percentage={calcsA.sodiumPct}
               delay={0.25}
               detail={ratio(calcsA.sodiumMg, limits.sodium, 'mg')}
+              wholePackText={wholePackA ? `Whole Pack: ${wholePackA.sodiumMg}mg` : null}
             />
           </div>
 
@@ -478,12 +547,13 @@ export function StepResults({
             <button
               type="button"
               onClick={() => {
-                handleRequestAddToPlate(
+                handleOpenPortionModal(
                   productA.product || 'Scanned Food Product',
                   calcsA.sugarGrams,
                   calcsA.satFatGrams,
                   calcsA.sodiumMg,
-                  productA.serving_size
+                  productA.serving_size,
+                  totalServingsA
                 )
                 setSingleAdded(true)
                 setTimeout(() => setSingleAdded(false), 3000)
@@ -514,12 +584,12 @@ export function StepResults({
         </div>
       )}
 
-      {/* Mismatch Confirmation Modal */}
+      {/* "How Much Did You Eat?" Portion Modal */}
       <AnimatePresence>
-        {pendingAdd && (
+        {portionModal && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
-            onClick={() => setPendingAdd(null)}
+            onClick={() => setPortionModal(null)}
           >
             <motion.div
               initial={{ scale: 0.88, opacity: 0, y: 20 }}
@@ -530,11 +600,11 @@ export function StepResults({
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              aria-labelledby="mismatch-title"
+              aria-labelledby="portion-modal-title"
             >
               <button
                 type="button"
-                onClick={() => setPendingAdd(null)}
+                onClick={() => setPortionModal(null)}
                 className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink transition-transform hover:scale-110 cursor-pointer"
                 aria-label="Close dialog"
               >
@@ -542,45 +612,102 @@ export function StepResults({
               </button>
 
               <div className="flex items-center gap-3">
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-toy-orange text-white shadow-[0_2px_0_0_var(--toy-ink)]">
-                  <AlertTriangle className="size-6" strokeWidth={2.7} />
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] text-xl">
+                  🍽️
                 </span>
-                <h4 id="mismatch-title" className="font-display text-xl font-bold text-toy-ink">
-                  Confirm Add to Plate
-                </h4>
+                <div>
+                  <h4 id="portion-modal-title" className="font-display text-xl font-bold text-toy-ink leading-tight">
+                    How much did you eat?
+                  </h4>
+                  <p className="text-xs font-bold text-toy-ink/70 truncate max-w-[200px]">
+                    {portionModal.productName}
+                  </p>
+                </div>
               </div>
 
-              <p className="mt-4 text-sm sm:text-base font-semibold leading-relaxed text-toy-ink text-pretty">
-                You are viewing limits for {limits.name}, but your active profile is {profileName}. Add &ldquo;{pendingAdd.name}&rdquo; to {profileName}&apos;s plate?
+              {isWhatIf && (
+                <div className="mt-3 rounded-xl border-2 border-toy-ink bg-toy-yellow/20 px-3 py-1.5 text-xs font-bold text-toy-ink">
+                  ⚠️ Logging to <strong>{profileName}&apos;s Plate</strong>
+                </div>
+              )}
+
+              <p className="mt-3 text-xs sm:text-sm font-semibold text-muted-foreground">
+                Select your portion size to track accurate daily totals:
               </p>
 
-              <div className="mt-6 flex flex-col gap-2.5">
+              <div className="mt-4 flex flex-col gap-2.5">
+                {/* 1 Serving Option */}
                 <button
                   type="button"
-                  onClick={() => {
-                    performAddToPlate(
-                      pendingAdd.name,
-                      pendingAdd.sugarG,
-                      pendingAdd.satFatG,
-                      pendingAdd.sodiumMg,
-                      pendingAdd.servingSize
-                    )
-                    setPendingAdd(null)
-                  }}
-                  className="toy-press font-display flex w-full items-center justify-center gap-2 rounded-2xl border-4 border-toy-ink bg-toy-yellow py-3 text-base font-bold text-toy-ink shadow-[0_4px_0_0_var(--toy-ink)] hover:brightness-105 cursor-pointer"
+                  onClick={() => handleSelectPortion(1, '1 Serving')}
+                  className="toy-press flex items-center justify-between rounded-2xl border-3 border-toy-ink bg-[#fffef0] p-3.5 text-left transition-all hover:bg-toy-yellow/30 shadow-[0_2px_0_0_var(--toy-ink)] cursor-pointer"
                 >
-                  <Check className="size-5 stroke-[3]" />
-                  <span>Yes, add for {profileName}</span>
+                  <div className="flex flex-col">
+                    <span className="font-display text-base font-bold text-toy-ink">
+                      1 Serving
+                    </span>
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {portionModal.sugarGrams}g sugar · {Math.round((portionModal.sugarGrams / 4.0) * 10) / 10} tsp
+                    </span>
+                  </div>
+                  <span className="font-display text-xs font-black uppercase text-toy-ink bg-white border-2 border-toy-ink px-2.5 py-1 rounded-full">
+                    1x
+                  </span>
                 </button>
 
+                {/* 2 Servings Option */}
                 <button
                   type="button"
-                  onClick={() => setPendingAdd(null)}
-                  className="font-display w-full rounded-xl border-2 border-toy-ink bg-muted py-2.5 text-sm font-bold text-toy-ink transition-colors hover:bg-muted/80 cursor-pointer"
+                  onClick={() => handleSelectPortion(2, '2 Servings')}
+                  className="toy-press flex items-center justify-between rounded-2xl border-3 border-toy-ink bg-[#fffef0] p-3.5 text-left transition-all hover:bg-toy-yellow/30 shadow-[0_2px_0_0_var(--toy-ink)] cursor-pointer"
                 >
-                  Cancel
+                  <div className="flex flex-col">
+                    <span className="font-display text-base font-bold text-toy-ink">
+                      2 Servings
+                    </span>
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {Math.round(portionModal.sugarGrams * 2 * 10) / 10}g sugar · {Math.round(((portionModal.sugarGrams * 2) / 4.0) * 10) / 10} tsp
+                    </span>
+                  </div>
+                  <span className="font-display text-xs font-black uppercase text-toy-ink bg-white border-2 border-toy-ink px-2.5 py-1 rounded-full">
+                    2x
+                  </span>
                 </button>
+
+                {/* Whole Pack Option: only if totalServings > 1 */}
+                {portionModal.totalServings !== null && portionModal.totalServings > 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSelectPortion(
+                        portionModal.totalServings!,
+                        `Whole Pack (${portionModal.totalServings} servings)`
+                      )
+                    }
+                    className="toy-press flex items-center justify-between rounded-2xl border-3 border-toy-ink bg-toy-yellow p-3.5 text-left transition-all hover:brightness-105 shadow-[0_2px_0_0_var(--toy-ink)] cursor-pointer"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-display text-base font-bold text-toy-ink">
+                        Whole Pack
+                      </span>
+                      <span className="text-xs font-bold text-toy-ink/80">
+                        {Math.round(portionModal.sugarGrams * portionModal.totalServings * 10) / 10}g sugar · {portionModal.totalServings} servings
+                      </span>
+                    </div>
+                    <span className="font-display text-xs font-black uppercase text-toy-ink bg-white border-2 border-toy-ink px-2.5 py-1 rounded-full">
+                      {portionModal.totalServings}x
+                    </span>
+                  </button>
+                )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setPortionModal(null)}
+                className="mt-4 w-full rounded-xl border-2 border-toy-ink bg-muted py-2 text-xs font-bold text-toy-ink hover:bg-muted/80 cursor-pointer"
+              >
+                Cancel
+              </button>
             </motion.div>
           </div>
         )}
@@ -619,7 +746,7 @@ function getTextColor(pct: number) {
 
 function CompactVerdictBadge({ verdict }: { verdict: string }) {
   const isExceed = /(exceed|🚨)/i.test(verdict)
-  const isModerate = /(moderate|high|⚠️)/i.test(verdict)
+  const isHighOrModerate = /(high|moderate|⚠️)/i.test(verdict)
 
   let badgeColor = 'bg-toy-green text-white'
   let text = '✅ WITHIN'
@@ -627,9 +754,9 @@ function CompactVerdictBadge({ verdict }: { verdict: string }) {
   if (isExceed) {
     badgeColor = 'bg-toy-red text-white'
     text = '🚨 EXCEEDS'
-  } else if (isModerate) {
+  } else if (isHighOrModerate) {
     badgeColor = 'bg-toy-orange text-white'
-    text = '⚠️ MODERATE'
+    text = '⚠️ HIGH LEVELS'
   }
 
   return (
@@ -693,9 +820,8 @@ function CompareProductColumn({
   productData,
   calcs,
   limits,
-  profileName,
   summary,
-  wholePackTsp,
+  wholePack,
   onAddToPlate,
 }: {
   tag: string
@@ -703,9 +829,8 @@ function CompareProductColumn({
   productData: ProductAnalysis
   calcs: ReturnType<typeof calculateNutrients>
   limits: { sugar: number; satFat: number; sodium: number }
-  profileName: string
   summary: string
-  wholePackTsp: number | null
+  wholePack: ReturnType<typeof calculateWholePackMetrics>
   onAddToPlate: (
     name: string,
     sugarG: number,
@@ -760,9 +885,9 @@ function CompareProductColumn({
           pct={calcs.sugarPct}
           delay={0.1}
         />
-        {wholePackTsp != null && wholePackTsp > 0 && (
+        {wholePack?.sugarTsp != null && wholePack.sugarTsp > 0 && (
           <div className="text-[9px] font-bold text-toy-red text-right -mt-1">
-            Whole Pack: {wholePackTsp} tsp
+            Whole Pack: {wholePack.sugarTsp} tsp
           </div>
         )}
 
@@ -773,6 +898,11 @@ function CompareProductColumn({
           pct={calcs.satFatPct}
           delay={0.2}
         />
+        {wholePack?.satFatGrams != null && wholePack.satFatGrams > 0 && (
+          <div className="text-[9px] font-bold text-toy-ink/75 text-right -mt-1">
+            Whole Pack: {wholePack.satFatGrams}g
+          </div>
+        )}
 
         <CompactNutrientBar
           icon="🧂"
@@ -781,6 +911,11 @@ function CompareProductColumn({
           pct={calcs.sodiumPct}
           delay={0.3}
         />
+        {wholePack?.sodiumMg != null && wholePack.sodiumMg > 0 && (
+          <div className="text-[9px] font-bold text-toy-ink/75 text-right -mt-1">
+            Whole Pack: {wholePack.sodiumMg}mg
+          </div>
+        )}
       </div>
 
       {/* Hidden count badge (if any) */}

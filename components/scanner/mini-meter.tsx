@@ -10,12 +10,14 @@ export function MiniMeter({
   delay = 0,
   detail,
   shape = 'tube',
+  wholePackText,
 }: {
   label: string
   percentage: number
   delay?: number
   detail?: string
   shape?: 'bottle' | 'tube' | 'salt'
+  wholePackText?: string | null
 }) {
   const { fill } = levelColor(percentage)
   return (
@@ -34,6 +36,11 @@ export function MiniMeter({
       {detail && (
         <span className="font-display rounded-full border-[3px] border-toy-ink bg-[#eef8ff] px-3 py-0.5 text-sm font-bold text-toy-ink">
           {detail}
+        </span>
+      )}
+      {wholePackText && (
+        <span className="font-display rounded-full border-2 border-toy-ink bg-[#fff3d4] px-2.5 py-0.5 text-xs font-bold text-toy-ink shadow-[0_1px_0_0_var(--toy-ink)]">
+          {wholePackText}
         </span>
       )}
     </motion.article>
