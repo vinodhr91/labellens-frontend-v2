@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, CheckCircle2, RotateCcw, Utensils, Users, X } from 'lucide-react'
+import { Check, CheckCircle2, ChevronDown, Minus, Plus, RotateCcw, Utensils, Users, X } from 'lucide-react'
 import { findMetric, toNumber, type AnalysisResult, type ProductAnalysis } from '@/lib/scanner'
 import { addProductToProfilePlate, getActiveProfile, getActiveProfileName } from '@/lib/storage'
 import { ToyButton } from './toy-button'
@@ -316,6 +316,9 @@ export function StepResults({
     totalServings: number | null
   } | null>(null)
 
+  // Serving count for portion modal (1 up to maxServings)
+  const [selectedServings, setSelectedServings] = useState<number>(1)
+
   // Execute add to profile plate
   const performAddToPlate = (
     productName: string,
@@ -347,6 +350,7 @@ export function StepResults({
     servingSize?: string,
     totalServings?: number | null
   ) => {
+    setSelectedServings(1)
     setPortionModal({
       productName: productName || 'Scanned Food Product',
       sugarGrams,
@@ -357,16 +361,24 @@ export function StepResults({
     })
   }
 
-  const handleSelectPortion = (multiplier: number, label: string) => {
+  const handleConfirmPortion = () => {
     if (!portionModal) return
 
-    const sugarG = Math.round(portionModal.sugarGrams * multiplier * 10) / 10
-    const satFatG = Math.round(portionModal.satFatGrams * multiplier * 10) / 10
-    const sodiumMg = Math.round(portionModal.sodiumMg * multiplier)
+    const sugarG = Math.round(portionModal.sugarGrams * selectedServings * 10) / 10
+    const satFatG = Math.round(portionModal.satFatGrams * selectedServings * 10) / 10
+    const sodiumMg = Math.round(portionModal.sodiumMg * selectedServings)
 
-    let servingDesc = label
+    const isPackKnown = portionModal.totalServings !== null && portionModal.totalServings >= 1
+    const maxServings = isPackKnown
+      ? Math.max(1, Math.round(portionModal.totalServings!))
+      : 10
+    const isWholePack = isPackKnown && selectedServings === maxServings
+
+    let servingDesc = isWholePack
+      ? `Whole Pack (${selectedServings} servings)`
+      : `${selectedServings} Serving${selectedServings > 1 ? 's' : ''}`
     if (portionModal.servingSize) {
-      servingDesc = `${label} (${portionModal.servingSize})`
+      servingDesc += ` (${portionModal.servingSize})`
     }
 
     performAddToPlate(
@@ -640,131 +652,150 @@ export function StepResults({
 
       {/* "How Much Did You Eat?" Portion Modal */}
       <AnimatePresence>
-        {portionModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
-            onClick={() => setPortionModal(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.88, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.88, opacity: 0, y: 20 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 25 }}
-              className="toy-block relative w-full max-w-sm bg-white p-6 shadow-2xl text-left"
-              onClick={(e) => e.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="portion-modal-title"
+        {portionModal && (() => {
+          const isPackKnown = portionModal.totalServings !== null && portionModal.totalServings >= 1
+          const maxServings = isPackKnown
+            ? Math.max(1, Math.round(portionModal.totalServings!))
+            : 10
+
+          const totalSugarG = Math.round(portionModal.sugarGrams * selectedServings * 10) / 10
+          const totalSugarTsp = Math.round(((portionModal.sugarGrams * selectedServings) / 4.0) * 10) / 10
+          const totalSatFatG = Math.round(portionModal.satFatGrams * selectedServings * 10) / 10
+          const totalSodiumMg = Math.round(portionModal.sodiumMg * selectedServings)
+
+          const options = Array.from({ length: maxServings }, (_, i) => {
+            const num = i + 1
+            const isMax = num === maxServings
+            const label = isPackKnown && isMax ? `${num} - Whole Pack` : `${num} Serving${num > 1 ? 's' : ''}`
+            return { value: num, label }
+          })
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
+              onClick={() => setPortionModal(null)}
             >
-              <button
-                type="button"
-                onClick={() => setPortionModal(null)}
-                className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink transition-transform hover:scale-110 cursor-pointer"
-                aria-label="Close dialog"
+              <motion.div
+                initial={{ scale: 0.88, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.88, opacity: 0, y: 20 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 25 }}
+                className="toy-block relative w-full max-w-sm bg-white p-5 sm:p-6 shadow-2xl text-left"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="portion-modal-title"
               >
-                <X className="size-4" strokeWidth={3} />
-              </button>
-
-              <div className="flex items-center gap-3">
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] text-xl">
-                  🍽️
-                </span>
-                <div>
-                  <h4 id="portion-modal-title" className="font-display text-xl font-bold text-toy-ink leading-tight">
-                    How much did you eat?
-                  </h4>
-                  <p className="text-xs font-bold text-toy-ink/70 truncate max-w-[200px]">
-                    {portionModal.productName}
-                  </p>
-                </div>
-              </div>
-
-              {isWhatIf && (
-                <div className="mt-3 rounded-xl border-2 border-toy-ink bg-toy-yellow/20 px-3 py-1.5 text-xs font-bold text-toy-ink">
-                  ⚠️ Logging to <strong>{profileName}&apos;s Plate</strong>
-                </div>
-              )}
-
-              <p className="mt-3 text-xs sm:text-sm font-semibold text-muted-foreground">
-                Select your portion size to track accurate daily totals:
-              </p>
-
-              <div className="mt-4 flex flex-col gap-2.5">
-                {/* 1 Serving Option */}
                 <button
                   type="button"
-                  onClick={() => handleSelectPortion(1, '1 Serving')}
-                  className="toy-press flex items-center justify-between rounded-2xl border-3 border-toy-ink bg-[#fffef0] p-3.5 text-left transition-all hover:bg-toy-yellow/30 shadow-[0_2px_0_0_var(--toy-ink)] cursor-pointer"
+                  onClick={() => setPortionModal(null)}
+                  className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink transition-transform hover:scale-110 cursor-pointer"
+                  aria-label="Close dialog"
                 >
-                  <div className="flex flex-col">
-                    <span className="font-display text-base font-bold text-toy-ink">
-                      1 Serving
-                    </span>
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {portionModal.sugarGrams}g sugar · {Math.round((portionModal.sugarGrams / 4.0) * 10) / 10} tsp
-                    </span>
-                  </div>
-                  <span className="font-display text-xs font-black uppercase text-toy-ink bg-white border-2 border-toy-ink px-2.5 py-1 rounded-full">
-                    1x
-                  </span>
+                  <X className="size-4" strokeWidth={3} />
                 </button>
 
-                {/* 2 Servings Option */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectPortion(2, '2 Servings')}
-                  className="toy-press flex items-center justify-between rounded-2xl border-3 border-toy-ink bg-[#fffef0] p-3.5 text-left transition-all hover:bg-toy-yellow/30 shadow-[0_2px_0_0_var(--toy-ink)] cursor-pointer"
-                >
-                  <div className="flex flex-col">
-                    <span className="font-display text-base font-bold text-toy-ink">
-                      2 Servings
-                    </span>
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {Math.round(portionModal.sugarGrams * 2 * 10) / 10}g sugar · {Math.round(((portionModal.sugarGrams * 2) / 4.0) * 10) / 10} tsp
-                    </span>
-                  </div>
-                  <span className="font-display text-xs font-black uppercase text-toy-ink bg-white border-2 border-toy-ink px-2.5 py-1 rounded-full">
-                    2x
+                <div className="flex items-center gap-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] text-xl">
+                    🍽️
                   </span>
-                </button>
+                  <div>
+                    <h4 id="portion-modal-title" className="font-display text-xl font-bold text-toy-ink leading-tight">
+                      How much did you eat?
+                    </h4>
+                    <p className="text-xs font-bold text-toy-ink/70 truncate max-w-[200px]">
+                      {portionModal.productName}
+                    </p>
+                  </div>
+                </div>
 
-                {/* Whole Pack Option: only if totalServings > 1 */}
-                {portionModal.totalServings !== null && portionModal.totalServings > 1 && (
+                {isWhatIf && (
+                  <div className="mt-3 rounded-xl border-2 border-toy-ink bg-toy-yellow/20 px-3 py-1.5 text-xs font-bold text-toy-ink">
+                    ⚠️ Logging to <strong>{profileName}&apos;s Plate</strong>
+                  </div>
+                )}
+
+                <p className="mt-3 text-xs sm:text-sm font-semibold text-muted-foreground">
+                  Select servings to log:
+                </p>
+
+                {/* Number Selector: Stepper [-] + Dropdown + Stepper [+] */}
+                <div className="mt-3 flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      handleSelectPortion(
-                        portionModal.totalServings!,
-                        `Whole Pack (${portionModal.totalServings} servings)`
-                      )
-                    }
-                    className="toy-press flex items-center justify-between rounded-2xl border-3 border-toy-ink bg-toy-yellow p-3.5 text-left transition-all hover:brightness-105 shadow-[0_2px_0_0_var(--toy-ink)] cursor-pointer"
+                    onClick={() => setSelectedServings((prev) => Math.max(1, prev - 1))}
+                    disabled={selectedServings <= 1}
+                    className="flex size-12 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-white font-display text-2xl font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] disabled:opacity-40 active:translate-y-0.5 cursor-pointer disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                    aria-label="Decrease servings"
                   >
-                    <div className="flex flex-col">
-                      <span className="font-display text-base font-bold text-toy-ink">
-                        Whole Pack
-                      </span>
-                      <span className="text-xs font-bold text-toy-ink/80">
-                        {Math.round(portionModal.sugarGrams * portionModal.totalServings * 10) / 10}g sugar · {portionModal.totalServings} servings
-                      </span>
-                    </div>
-                    <span className="font-display text-xs font-black uppercase text-toy-ink bg-white border-2 border-toy-ink px-2.5 py-1 rounded-full">
-                      {portionModal.totalServings}x
-                    </span>
+                    <Minus className="size-5 stroke-[3]" />
                   </button>
-                )}
-              </div>
 
-              <button
-                type="button"
-                onClick={() => setPortionModal(null)}
-                className="mt-4 w-full rounded-xl border-2 border-toy-ink bg-muted py-2 text-xs font-bold text-toy-ink hover:bg-muted/80 cursor-pointer"
-              >
-                Cancel
-              </button>
-            </motion.div>
-          </div>
-        )}
+                  <div className="relative flex-1">
+                    <select
+                      value={selectedServings}
+                      onChange={(e) => setSelectedServings(Number(e.target.value))}
+                      className="w-full appearance-none rounded-2xl border-3 border-toy-ink bg-[#fffef0] px-4 py-3 font-display text-base font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] cursor-pointer pr-10 focus:outline-none focus:ring-2 focus:ring-toy-yellow"
+                    >
+                      {options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-toy-ink">
+                      <ChevronDown className="size-5 stroke-[2.5]" />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedServings((prev) => Math.min(maxServings, prev + 1))}
+                    disabled={selectedServings >= maxServings}
+                    className="flex size-12 shrink-0 items-center justify-center rounded-2xl border-3 border-toy-ink bg-white font-display text-2xl font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] disabled:opacity-40 active:translate-y-0.5 cursor-pointer disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                    aria-label="Increase servings"
+                  >
+                    <Plus className="size-5 stroke-[3]" />
+                  </button>
+                </div>
+
+                {/* Dynamic 'Total to add' calculation card */}
+                <div className="mt-3.5 rounded-2xl border-3 border-toy-ink bg-[#fefcf3] p-3.5 shadow-[0_2px_0_0_var(--toy-ink)]">
+                  <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Total to add:
+                  </div>
+                  <div className="font-display mt-0.5 text-base sm:text-lg font-bold text-toy-ink">
+                    {selectedServings} Serving{selectedServings > 1 ? 's' : ''}: {totalSugarG}g sugar, {totalSugarTsp} tsp
+                  </div>
+                  {(totalSatFatG > 0 || totalSodiumMg > 0) && (
+                    <div className="mt-0.5 text-xs font-semibold text-muted-foreground">
+                      {totalSatFatG}g sat fat · {totalSodiumMg}mg sodium
+                    </div>
+                  )}
+                </div>
+
+                {/* Confirm Action Button */}
+                <button
+                  type="button"
+                  onClick={handleConfirmPortion}
+                  className="toy-press font-display mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border-3 border-toy-ink bg-toy-yellow py-3 text-base font-bold text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)] hover:brightness-105 transition-all cursor-pointer"
+                >
+                  <Utensils className="size-5 stroke-[2.5]" />
+                  <span>Add to Plate</span>
+                </button>
+
+                {/* Cancel Button */}
+                <button
+                  type="button"
+                  onClick={() => setPortionModal(null)}
+                  className="mt-2.5 w-full rounded-xl border-2 border-toy-ink bg-muted py-2 text-xs font-bold text-toy-ink hover:bg-muted/80 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </motion.div>
+            </div>
+          )
+        })()}
       </AnimatePresence>
 
       {/* Citations & Feedback */}

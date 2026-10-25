@@ -20,6 +20,8 @@ export function SugarBottle({
 }) {
   const { fill, label } = levelColor(percentage)
   const tsp = teaspoons != null ? Math.round(toNumber(teaspoons) * 10) / 10 : null
+  const limitGNum = limitG != null && limitG !== '' ? toNumber(limitG) : null
+  const limitTsp = limitGNum != null && limitGNum > 0 ? Math.round((limitGNum / 4.0) * 10) / 10 : null
 
   return (
     <article className="toy-block p-5" aria-labelledby="sugar-title">
@@ -45,9 +47,9 @@ export function SugarBottle({
             {tsp == null ? '—' : <CountUp value={tsp} />}
           </span>
           <span className="font-display mt-1 text-xl font-bold text-toy-ink">teaspoons</span>
-          {limitG != null && limitG !== '' && (
+          {limitTsp != null && (
             <span className="font-display mt-2 w-fit rounded-full border-[3px] border-toy-ink bg-[#eef8ff] px-3 py-0.5 text-sm font-bold text-toy-ink">
-              Limit: {limitG}g
+              Limit: {limitTsp} tsp
             </span>
           )}
           {wholePackTeaspoons != null && wholePackTeaspoons > 0 && (
