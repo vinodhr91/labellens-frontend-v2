@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, CheckCircle2, ChevronDown, Minus, Plus, RotateCcw, Utensils, Users, X } from 'lucide-react'
-import { findMetric, toNumber, type AnalysisResult, type ProductAnalysis } from '@/lib/scanner'
+import { findMetric, toNumber, type AnalysisResult, type HiddenIngredientItem, type ProductAnalysis } from '@/lib/scanner'
 import { addProductToProfilePlate, getActiveProfile, getActiveProfileName } from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { VerdictStamp } from './verdict-stamp'
@@ -210,26 +210,125 @@ function calculateNutrients(
   }
 }
 
+function getFlaggedIngredientsList(hidden?: (HiddenIngredientItem | string)[]): string {
+  if (!hidden || !Array.isArray(hidden) || hidden.length === 0) return 'None'
+  const names: string[] = []
+  const seen = new Set<string>()
+
+  for (const h of hidden) {
+    let name = ''
+    if (typeof h === 'string') {
+      name = h.trim()
+    } else if (h && typeof h === 'object') {
+      const itemObj = h as Record<string, unknown>
+      name = String(itemObj.name || itemObj.ingredient || itemObj.title || '').trim()
+    }
+    if (name) {
+      const lower = name.toLowerCase()
+      if (!seen.has(lower)) {
+        seen.add(lower)
+        names.push(name)
+      }
+    }
+  }
+
+  return names.length > 0 ? names.join(', ') : 'None'
+}
+
 function buildWhatsAppShareUrl(
   productData: ProductAnalysis,
-  calcs: { sugarTeaspoons: number; sugarPct: number; satFatPct: number; sodiumPct: number },
+  calcs: {
+    sugarTeaspoons: number
+    sugarPct: number
+    satFatPct: number
+    sodiumPct: number
+    sugarGrams: number
+    satFatGrams: number
+    sodiumMg: number
+  },
   demographic: string
 ): string {
   const rawName = (productData.product || '').trim()
   const isUnknown = !rawName || rawName.toLowerCase() === 'unknown'
   const shareProductName = isUnknown ? 'a packaged food item' : rawName
 
-  let worstMetricText = ''
+  let worstMetricName = 'Sugar'
+  let worstPct = calcs.sugarPct
+  let amountLine = `🥄 That's ${calcs.sugarTeaspoons} teaspoons.`
+
   if (calcs.satFatPct > calcs.sugarPct && calcs.satFatPct >= calcs.sodiumPct) {
-    worstMetricText = `It has ${calcs.satFatPct}% of a ${demographic}'s daily saturated fat limit.`
+    worstMetricName = 'Saturated Fat'
+    worstPct = calcs.satFatPct
+    amountLine = `🥄 That's ${calcs.satFatGrams}g saturated fat.`
   } else if (calcs.sodiumPct > calcs.sugarPct && calcs.sodiumPct > calcs.satFatPct) {
-    worstMetricText = `It has ${calcs.sodiumPct}% of a ${demographic}'s daily sodium limit.`
-  } else {
-    worstMetricText = `It has ${calcs.sugarTeaspoons} teaspoons of sugar, which is ${calcs.sugarPct}% of a ${demographic}'s daily limit.`
+    worstMetricName = 'Sodium'
+    worstPct = calcs.sodiumPct
+    amountLine = `🥄 That's ${calcs.sodiumMg}mg sodium.`
   }
 
-  const shareText = `I just scanned ${shareProductName} on LabelLens. ${worstMetricText} Check your kitchen here: https://foodlabel-lens.vercel.app/`
-  return `https://wa.me/?text=${encodeURIComponent(shareText)}`
+  const flaggedText = getFlaggedIngredientsList(productData.hidden_ingredients)
+
+  const lines = [
+    `🍔 ${shareProductName}`,
+    `🚨 ${worstMetricName}: This is ${worstPct}% of a ${demographic}'s daily limit.`,
+    amountLine,
+    `🔍 Flagged ingredients: ${flaggedText}`,
+    '',
+    'Check your kitchen here: https://foodlabel-lens.vercel.app/',
+  ]
+
+  return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`
+}
+
+function buildCompareWhatsAppShareUrl(
+  productA: ProductAnalysis,
+  calcsA: ReturnType<typeof calculateNutrients>,
+  productB: ProductAnalysis,
+  calcsB: ReturnType<typeof calculateNutrients>,
+  demographic: string
+): string {
+  const formatProductBlock = (p: ProductAnalysis, c: ReturnType<typeof calculateNutrients>) => {
+    const rawName = (p.product || '').trim()
+    const isUnknown = !rawName || rawName.toLowerCase() === 'unknown'
+    const name = isUnknown ? 'a packaged food item' : rawName
+
+    let worstMetricName = 'Sugar'
+    let worstPct = c.sugarPct
+    let amountLine = `🥄 That's ${c.sugarTeaspoons} teaspoons.`
+
+    if (c.satFatPct > c.sugarPct && c.satFatPct >= c.sodiumPct) {
+      worstMetricName = 'Saturated Fat'
+      worstPct = c.satFatPct
+      amountLine = `🥄 That's ${c.satFatGrams}g saturated fat.`
+    } else if (c.sodiumPct > c.sugarPct && c.sodiumPct > c.satFatPct) {
+      worstMetricName = 'Sodium'
+      worstPct = c.sodiumPct
+      amountLine = `🥄 That's ${c.sodiumMg}mg sodium.`
+    }
+
+    const flaggedText = getFlaggedIngredientsList(p.hidden_ingredients)
+
+    return [
+      `🍔 ${name}`,
+      `🚨 ${worstMetricName}: This is ${worstPct}% of a ${demographic}'s daily limit.`,
+      amountLine,
+      `🔍 Flagged ingredients: ${flaggedText}`,
+    ]
+  }
+
+  const lines = [
+    '⚔️ Food Label Comparison:',
+    '',
+    ...formatProductBlock(productA, calcsA),
+    '',
+    'VS',
+    '',
+    ...formatProductBlock(productB, calcsB),
+    '',
+    'Check your kitchen here: https://foodlabel-lens.vercel.app/',
+  ]
+
+  return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`
 }
 
 export function StepResults({
@@ -304,7 +403,9 @@ export function StepResults({
   const oneGlanceSummaryB = calcsB ? generateOneGlanceSummary(calcsB, hiddenCountB) : ''
 
   // WhatsApp Share Link (Intelligent Fallback Name & Worst Metric Highlighting)
-  const whatsappShareUrl = buildWhatsAppShareUrl(productA, calcsA, limits.name)
+  const whatsappShareUrl = isCompareMode && productB && calcsB
+    ? buildCompareWhatsAppShareUrl(productA, calcsA, productB, calcsB, limits.name)
+    : buildWhatsAppShareUrl(productA, calcsA, limits.name)
 
   // "How Much Did You Eat?" portion modal state
   const [portionModal, setPortionModal] = useState<{
