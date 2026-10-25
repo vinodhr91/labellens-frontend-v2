@@ -3,13 +3,42 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { FEEDBACK_API_URL } from '@/lib/scanner'
 import { ToyButton } from './toy-button'
 
 const REASONS = ['Numbers are wrong', 'Missed ingredients', 'Other'] as const
 
-export function Feedback() {
+export function Feedback({ productName }: { productName?: string }) {
   const [status, setStatus] = useState<'idle' | 'up' | 'down-sent'>('idle')
   const [open, setOpen] = useState(false)
+
+  const sendFeedback = async (isAccurate: boolean, comment?: string) => {
+    try {
+      await fetch(FEEDBACK_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_name: productName || 'Scanned Food Product',
+          is_accurate: isAccurate,
+          user_comment: comment || (isAccurate ? 'Accurate' : 'Inaccurate'),
+          reason: comment || (isAccurate ? 'Accurate' : 'Inaccurate'),
+        }),
+      })
+    } catch (err) {
+      console.error('Feedback submit error:', err)
+    }
+  }
+
+  const handleThumbsUp = () => {
+    setStatus('up')
+    sendFeedback(true, 'Accurate')
+  }
+
+  const handleThumbsDownSubmit = (reason: string) => {
+    setOpen(false)
+    setStatus('down-sent')
+    sendFeedback(false, reason)
+  }
 
   return (
     <article className="toy-block p-5 text-center" aria-labelledby="feedback-title">
@@ -18,7 +47,7 @@ export function Feedback() {
       </h3>
       {status === 'idle' ? (
         <div className="mt-4 flex justify-center gap-4">
-          <ToyButton variant="green" onClick={() => setStatus('up')} aria-label="Yes, accurate" className="size-20 p-0">
+          <ToyButton variant="green" onClick={handleThumbsUp} aria-label="Yes, accurate" className="size-20 p-0">
             <ThumbsUp className="size-9" strokeWidth={2.5} aria-hidden="true" />
           </ToyButton>
           <ToyButton variant="red" onClick={() => setOpen(true)} aria-label="No, not accurate" className="size-20 p-0">
@@ -40,10 +69,7 @@ export function Feedback() {
         {open && (
           <FeedbackModal
             onClose={() => setOpen(false)}
-            onSubmit={() => {
-              setOpen(false)
-              setStatus('down-sent')
-            }}
+            onSubmit={handleThumbsDownSubmit}
           />
         )}
       </AnimatePresence>

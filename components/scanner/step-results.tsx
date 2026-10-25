@@ -836,7 +836,7 @@ export function StepResults({
       {/* Citations & Feedback */}
       {result.citations && result.citations.length > 0 && <Citations citations={result.citations} />}
 
-      <Feedback />
+      <Feedback productName={productA.product} />
 
       <ToyButton variant="yellow" onClick={onRestart} className="w-full">
         <RotateCcw className="size-6" strokeWidth={3} aria-hidden="true" />
