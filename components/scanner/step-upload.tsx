@@ -208,6 +208,7 @@ export function StepUpload({
       const form = new FormData()
       form.append('age_group', ageGroup)
       form.append('gender', gender)
+      form.append('profile_name', currentProfileName || 'Default Profile')
       form.append('image1', image1.file)
       if (scanMode === 'compare' && image2) {
         form.append('image2', image2.file)
