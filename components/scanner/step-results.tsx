@@ -280,57 +280,6 @@ function buildWhatsAppShareUrl(
   return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`
 }
 
-function buildCompareWhatsAppShareUrl(
-  productA: ProductAnalysis,
-  calcsA: ReturnType<typeof calculateNutrients>,
-  productB: ProductAnalysis,
-  calcsB: ReturnType<typeof calculateNutrients>,
-  demographic: string
-): string {
-  const formatProductBlock = (p: ProductAnalysis, c: ReturnType<typeof calculateNutrients>) => {
-    const rawName = (p.product || '').trim()
-    const isUnknown = !rawName || rawName.toLowerCase() === 'unknown'
-    const name = isUnknown ? 'a packaged food item' : rawName
-
-    let worstMetricName = 'Sugar'
-    let worstPct = c.sugarPct
-    let amountLine = `🥄 That's ${c.sugarTeaspoons} teaspoons.`
-
-    if (c.satFatPct > c.sugarPct && c.satFatPct >= c.sodiumPct) {
-      worstMetricName = 'Saturated Fat'
-      worstPct = c.satFatPct
-      amountLine = `🥄 That's ${c.satFatGrams}g saturated fat.`
-    } else if (c.sodiumPct > c.sugarPct && c.sodiumPct > c.satFatPct) {
-      worstMetricName = 'Sodium'
-      worstPct = c.sodiumPct
-      amountLine = `🥄 That's ${c.sodiumMg}mg sodium.`
-    }
-
-    const flaggedText = getFlaggedIngredientsList(p.hidden_ingredients)
-
-    return [
-      `🍔 ${name}`,
-      `🚨 ${worstMetricName}: This is ${worstPct}% of a ${demographic}'s daily limit.`,
-      amountLine,
-      `🔍 Flagged ingredients: ${flaggedText}`,
-    ]
-  }
-
-  const lines = [
-    '⚔️ Food Label Comparison:',
-    '',
-    ...formatProductBlock(productA, calcsA),
-    '',
-    'VS',
-    '',
-    ...formatProductBlock(productB, calcsB),
-    '',
-    'Check your kitchen here: https://foodlabel-lens.vercel.app/',
-  ]
-
-  return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`
-}
-
 export function StepResults({
   result,
   profileName: initialProfileName,
@@ -403,9 +352,7 @@ export function StepResults({
   const oneGlanceSummaryB = calcsB ? generateOneGlanceSummary(calcsB, hiddenCountB) : ''
 
   // WhatsApp Share Link (Intelligent Fallback Name & Worst Metric Highlighting)
-  const whatsappShareUrl = isCompareMode && productB && calcsB
-    ? buildCompareWhatsAppShareUrl(productA, calcsA, productB, calcsB, limits.name)
-    : buildWhatsAppShareUrl(productA, calcsA, limits.name)
+  const whatsappShareUrl = buildWhatsAppShareUrl(productA, calcsA, limits.name)
 
   // "How Much Did You Eat?" portion modal state
   const [portionModal, setPortionModal] = useState<{
@@ -624,19 +571,6 @@ export function StepResults({
               )}
             </div>
           ) : null}
-
-          {/* Share on WhatsApp Button in Compare Mode */}
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-            <a
-              href={whatsappShareUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink bg-[#25D366] py-3 text-sm sm:text-base font-bold text-white shadow-[0_3px_0_0_var(--toy-ink)] hover:brightness-105 transition-all cursor-pointer text-center"
-            >
-              <WhatsAppIcon className="size-5 fill-white shrink-0" />
-              <span>Share on WhatsApp</span>
-            </a>
-          </motion.div>
         </div>
       ) : (
         /* Single Scan Results */
