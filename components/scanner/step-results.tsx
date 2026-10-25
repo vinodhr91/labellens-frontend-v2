@@ -251,12 +251,12 @@ export function StepResults({
   // Category of the active profile (1-3, 4-6, 7-9, 10+)
   const profileAgeBracket: AgeBracket = (() => {
     const raw = (activeProfile?.age_group || '').toLowerCase()
-    if (raw.includes('1-3') || raw.includes('under')) return '1-3'
+    if (raw.includes('1-3') || raw.includes('under') || raw.includes('0') || raw.includes('12')) return '1-3'
     if (raw.includes('4-6')) return '4-6'
     if (raw.includes('7-9')) return '7-9'
     if (raw.includes('10')) return '10+'
     const demo = (result.demographic || '').toLowerCase()
-    if (demo.includes('1-3') || demo.includes('under')) return '1-3'
+    if (demo.includes('1-3') || demo.includes('under') || demo.includes('0') || demo.includes('12')) return '1-3'
     if (demo.includes('4-6')) return '4-6'
     if (demo.includes('7-9')) return '7-9'
     return '10+'

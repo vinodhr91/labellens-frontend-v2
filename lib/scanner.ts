@@ -1,7 +1,7 @@
 export const API_URL = 'https://labellens-api-cztz.onrender.com/api/analyze'
 
 export const GENDERS = ['Female', 'Male'] as const
-export const AGE_GROUPS = ['1-3', '4-6', '7-9', '10+', 'under-2'] as const
+export const AGE_GROUPS = ['under-2', '1-3', '4-6', '7-9', '10+'] as const
 
 export type Gender = (typeof GENDERS)[number] | 'Boy' | 'Girl' | 'Man' | 'Woman'
 export type AgeGroup = (typeof AGE_GROUPS)[number]

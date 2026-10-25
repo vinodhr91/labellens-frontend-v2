@@ -15,11 +15,11 @@ import { ToyButton } from './toy-button'
 import { PaywallModal } from './paywall-modal'
 
 const AGE_LABELS: Record<string, string> = {
+  'under-2': '0 – 12 months',
   '1-3': '1 – 3 years',
   '4-6': '4 – 6 years',
   '7-9': '7 – 9 years',
   '10+': '10+ years',
-  'under-2': 'Under 2 years',
 }
 
 const CYCLE_AVATARS = [
