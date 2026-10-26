@@ -265,45 +265,70 @@ export function StepUpload({
         </button>
       </div>
 
-      {/* Scan Mode Toggle: Single Scan vs Compare */}
-      <div className="flex flex-col items-center gap-1.5 w-full">
-        <div className="inline-flex rounded-full border-3 border-toy-ink bg-white p-1 shadow-[0_3px_0_0_var(--toy-ink)]">
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => {
-              if (loading) return
-              setScanMode('single')
-              setImage2(null)
-            }}
-            className={`font-display rounded-full px-5 py-2 text-sm sm:text-base font-bold transition-all ${
-              loading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-            } ${
+      {/* Two Large Distinct Mode Buttons Side-by-Side */}
+      <div className="grid grid-cols-2 gap-3 w-full">
+        {/* Button 1: Scan One Product */}
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            if (loading) return
+            setScanMode('single')
+            setImage2(null)
+          }}
+          className={`toy-press flex flex-col items-center justify-center gap-1.5 rounded-2xl border-4 border-toy-ink p-3.5 sm:p-4 text-center transition-all ${
+            loading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+          } ${
+            scanMode === 'single'
+              ? 'bg-toy-yellow text-toy-ink shadow-[0_4px_0_0_var(--toy-ink)] scale-[1.02]'
+              : 'bg-white text-toy-ink/70 hover:text-toy-ink hover:bg-[#fffef0] shadow-[0_3px_0_0_var(--toy-ink)]'
+          }`}
+        >
+          <span className="text-2xl sm:text-3xl leading-none">📷</span>
+          <span className="font-display text-xs sm:text-sm font-black uppercase tracking-wide leading-tight">
+            Scan One Product
+          </span>
+          <span
+            className={`font-display text-[10px] font-bold px-2 py-0.5 rounded-full border ${
               scanMode === 'single'
-                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
-                : 'text-toy-ink/60 hover:text-toy-ink'
+                ? 'bg-white border-toy-ink text-toy-ink shadow-xs'
+                : 'border-transparent text-muted-foreground'
             }`}
           >
-            📷 Single Scan
-          </button>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => {
-              if (loading) return
-              setScanMode('compare')
-            }}
-            className={`font-display rounded-full px-5 py-2 text-sm sm:text-base font-bold transition-all ${
-              loading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-            } ${
+            {scanMode === 'single' ? '✓ Selected' : 'Single'}
+          </span>
+        </button>
+
+        {/* Button 2: Compare Two Products */}
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            if (loading) return
+            setScanMode('compare')
+          }}
+          className={`toy-press flex flex-col items-center justify-center gap-1.5 rounded-2xl border-4 border-toy-ink p-3.5 sm:p-4 text-center transition-all ${
+            loading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+          } ${
+            scanMode === 'compare'
+              ? 'bg-toy-yellow text-toy-ink shadow-[0_4px_0_0_var(--toy-ink)] scale-[1.02]'
+              : 'bg-white text-toy-ink/70 hover:text-toy-ink hover:bg-[#fffef0] shadow-[0_3px_0_0_var(--toy-ink)]'
+          }`}
+        >
+          <span className="text-2xl sm:text-3xl leading-none">⚖️</span>
+          <span className="font-display text-xs sm:text-sm font-black uppercase tracking-wide leading-tight">
+            Compare Two Products
+          </span>
+          <span
+            className={`font-display text-[10px] font-bold px-2 py-0.5 rounded-full border ${
               scanMode === 'compare'
-                ? 'border-2 border-toy-ink bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)]'
-                : 'text-toy-ink/60 hover:text-toy-ink'
+                ? 'bg-white border-toy-ink text-toy-ink shadow-xs'
+                : 'border-transparent text-muted-foreground'
             }`}
           >
-            ⚖️ Compare
-          </button>
-        </div>
+            {scanMode === 'compare' ? '✓ Selected' : 'Comparison'}
+          </span>
+        </button>
       </div>
 
       <AnimatePresence mode="wait">

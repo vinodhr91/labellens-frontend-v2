@@ -68,6 +68,7 @@ export function StepOnboarding({
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null)
   const [showPaywall, setShowPaywall] = useState(false)
   const [cycleIndex, setCycleIndex] = useState(0)
+  const [isAnimationSkipped, setIsAnimationSkipped] = useState(false)
 
   // Load profiles from localStorage on mount (do NOT auto-populate gender/age so avatar cycles)
   useEffect(() => {
@@ -85,16 +86,16 @@ export function StepOnboarding({
     }
   }, [isLocked, onProfileLockedChange])
 
-  // Autocycle through avatars every 1.6s when unlocked
+  // Autocycle through avatars every 1.6s when unlocked and not skipped
   useEffect(() => {
-    if (isLocked) return
+    if (isLocked || isAnimationSkipped) return
 
     const interval = setInterval(() => {
       setCycleIndex((prev) => (prev + 1) % CYCLE_AVATARS.length)
     }, 1600)
 
     return () => clearInterval(interval)
-  }, [isLocked])
+  }, [isLocked, isAnimationSkipped])
 
   const lockedAvatar = lockedAvatarFor(gender, ageGroup)
   const currentAvatar = isLocked
@@ -237,44 +238,59 @@ export function StepOnboarding({
 
         {/* Below Dropdowns: Large Circle with Swipe-to-Lock Avatar */}
         <div className="flex flex-col items-center gap-2 pt-1">
-          <div className="relative flex size-48 items-center justify-center rounded-full border-4 border-toy-ink bg-gradient-to-b from-toy-yellow to-[#ffe98a] shadow-[0_6px_0_0_var(--toy-ink)]">
-            <AnimatePresence mode="wait">
-              {currentAvatar && (
+          <div className="relative flex items-center justify-center">
+            <div className="relative flex size-48 items-center justify-center rounded-full border-4 border-toy-ink bg-gradient-to-b from-toy-yellow to-[#ffe98a] shadow-[0_6px_0_0_var(--toy-ink)]">
+              <AnimatePresence mode="wait">
+                {currentAvatar && (
+                  <motion.div
+                    key={isLocked ? `locked-${currentAvatar.src}` : isAnimationSkipped ? 'skipped-avatar' : `cycle-${cycleIndex}`}
+                    initial={isLocked || isAnimationSkipped ? { scale: 0.9, opacity: 0 } : { x: 50, opacity: 0, scale: 0.9 }}
+                    animate={{ scale: 1, rotate: 0, x: 0, opacity: 1 }}
+                    exit={isLocked || isAnimationSkipped ? { opacity: 0 } : { x: -50, opacity: 0, scale: 0.9 }}
+                    transition={
+                      isLocked || isAnimationSkipped
+                        ? { duration: 0.2 }
+                        : { type: 'spring', stiffness: 320, damping: 24 }
+                    }
+                    className="relative size-44 overflow-hidden rounded-full"
+                  >
+                    <Image
+                      src={currentAvatar.src}
+                      alt={currentAvatar.alt}
+                      fill
+                      sizes="176px"
+                      className="object-cover"
+                      priority
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Lock in Badge: Only appears after both Gender and Age are selected */}
+              {isLocked && (
                 <motion.div
-                  key={isLocked ? `locked-${currentAvatar.src}` : `cycle-${cycleIndex}`}
-                  initial={isLocked ? { scale: 0.7, rotate: -15, opacity: 0 } : { x: 50, opacity: 0, scale: 0.9 }}
-                  animate={{ scale: 1, rotate: 0, x: 0, opacity: 1 }}
-                  exit={isLocked ? { scale: 0.7, opacity: 0 } : { x: -50, opacity: 0, scale: 0.9 }}
-                  transition={
-                    isLocked
-                      ? { type: 'spring', stiffness: 450, damping: 18 }
-                      : { type: 'spring', stiffness: 320, damping: 24 }
-                  }
-                  className="relative size-44 overflow-hidden rounded-full"
+                  initial={{ scale: 0, y: 10 }}
+                  animate={{ scale: 1, y: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 16 }}
+                  className="absolute -bottom-2.5 flex items-center gap-1 rounded-full border-3 border-toy-ink bg-toy-green px-3 py-0.5 text-xs font-bold text-white shadow-[0_2px_0_0_var(--toy-ink)]"
                 >
-                  <Image
-                    src={currentAvatar.src}
-                    alt={currentAvatar.alt}
-                    fill
-                    sizes="176px"
-                    className="object-cover"
-                    priority
-                  />
+                  <Lock className="size-3" strokeWidth={3} />
+                  <span>Locked In!</span>
                 </motion.div>
               )}
-            </AnimatePresence>
+            </div>
 
-            {/* Lock in Badge: Only appears after both Gender and Age are selected */}
-            {isLocked && (
-              <motion.div
-                initial={{ scale: 0, y: 10 }}
-                animate={{ scale: 1, y: 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 16 }}
-                className="absolute -bottom-2.5 flex items-center gap-1 rounded-full border-3 border-toy-ink bg-toy-green px-3 py-0.5 text-xs font-bold text-white shadow-[0_2px_0_0_var(--toy-ink)]"
+            {/* Skip Animation Button right next to cycling avatars */}
+            {!isLocked && !isAnimationSkipped && (
+              <button
+                type="button"
+                onClick={() => setIsAnimationSkipped(true)}
+                className="toy-press absolute -right-3 sm:-right-8 top-3 sm:top-4 font-display flex items-center gap-1 rounded-full border-2 border-toy-ink bg-white px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] hover:bg-toy-yellow hover:scale-105 transition-all cursor-pointer"
+                title="Stop avatar cycling animation"
               >
-                <Lock className="size-3" strokeWidth={3} />
-                <span>Locked In!</span>
-              </motion.div>
+                <span>⏩</span>
+                <span>Skip Animation</span>
+              </button>
             )}
           </div>
 
@@ -282,7 +298,7 @@ export function StepOnboarding({
           <div className="min-h-6 pt-1">
             {!isLocked && (
               <p className="font-display text-sm font-bold text-toy-ink/75">
-                Who are we checking this for?
+                {isAnimationSkipped ? 'Select Gender and Age above' : 'Who are we checking this for?'}
               </p>
             )}
           </div>
