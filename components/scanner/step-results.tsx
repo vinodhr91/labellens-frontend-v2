@@ -605,7 +605,11 @@ export function StepResults({
             percentage={calcsA.sugarPct}
             teaspoons={calcsA.sugarTeaspoons}
             grams={calcsA.sugarGrams}
-            limitG={limits.sugar}
+            limitG={
+              isWhatIf
+                ? limits.sugar
+                : ((productA.breakdown?.sugar as any)?.limit_g ?? limits.sugar)
+            }
             wholePackTeaspoons={wholePackA?.sugarTsp ?? null}
           />
 
