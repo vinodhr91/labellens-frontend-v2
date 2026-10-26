@@ -47,7 +47,7 @@ function shuffleFacts(facts: string[]): string[] {
 
 function getProfileEmoji(gender?: string, ageGroup?: string): string {
   const isFemale = isFemaleGender(gender || '')
-  const isAdult = ageGroup === '10+'
+  const isAdult = ageGroup === '10+' || ageGroup === '10+ years'
   if (isFemale) {
     return isAdult ? '👩' : '👧'
   }
@@ -107,8 +107,9 @@ export function StepUpload({
     const targetGender = active?.gender || gender
     const targetAge = active?.age_group || ageGroup
 
+    const normalizeAge = (a: string) => (a === '10+ years' ? '10+' : a)
     const genderChanged = editGender.toLowerCase() !== targetGender.toLowerCase()
-    const ageGroupChanged = editAgeGroup !== targetAge
+    const ageGroupChanged = normalizeAge(editAgeGroup) !== normalizeAge(targetAge)
 
     if (genderChanged || ageGroupChanged) {
       setShowResetCautionModal(true)
@@ -206,7 +207,8 @@ export function StepUpload({
 
     try {
       const form = new FormData()
-      form.append('age_group', ageGroup)
+      const normalizedAge = ageGroup === '10+ years' ? '10+' : ageGroup
+      form.append('age_group', normalizedAge)
       form.append('gender', gender)
       form.append('profile_name', currentProfileName || 'Default Profile')
       form.append('image1', image1.file)
@@ -603,7 +605,7 @@ export function StepUpload({
                             <div className="min-w-0">
                               <p className="font-display text-sm font-bold leading-tight truncate">{p.name}</p>
                               <p className="text-[11px] font-semibold text-toy-ink/70">
-                                {p.gender} · {p.age_group} yrs
+                                {p.gender} · {p.age_group.includes('year') || p.age_group.includes('yr') ? p.age_group : `${p.age_group} yrs`}
                               </p>
                             </div>
                           </button>
@@ -620,7 +622,8 @@ export function StepUpload({
                                     e.stopPropagation()
                                     setEditName(p.name)
                                     setEditGender((p.gender as Gender) || gender)
-                                    setEditAgeGroup((p.age_group as AgeGroup) || ageGroup)
+                                    const parsedAge = (p.age_group === '10+ years' ? '10+' : p.age_group) as AgeGroup
+                                    setEditAgeGroup(parsedAge || ageGroup)
                                     setModalMode('edit')
                                   }}
                                   className="toy-press flex items-center gap-1 rounded-lg border-2 border-toy-ink bg-white px-2 py-1 text-xs font-bold text-toy-ink hover:bg-toy-yellow/30 shadow-[0_1.5px_0_0_var(--toy-ink)] cursor-pointer"
@@ -739,7 +742,9 @@ export function StepUpload({
                       </label>
                       <div className="grid grid-cols-4 gap-1.5">
                         {(['1-3', '4-6', '7-9', '10+'] as const).map((age) => {
-                          const selected = editAgeGroup === age
+                          const selected =
+                            editAgeGroup === age ||
+                            (age === '10+' && (editAgeGroup === '10+' || editAgeGroup === '10+ years'))
                           return (
                             <button
                               key={age}

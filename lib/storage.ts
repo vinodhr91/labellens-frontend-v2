@@ -73,6 +73,65 @@ export function saveStoredProfile(profile: {
   }
 }
 
+export function createDefaultGuestProfile(): Profile {
+  if (typeof window === 'undefined') {
+    return {
+      id: `prof_${Date.now()}`,
+      name: 'Guest',
+      gender: 'Male',
+      age_group: '10+ years',
+      createdAt: Date.now(),
+    }
+  }
+
+  const current = getStoredProfiles()
+  const guestIndex = current.findIndex((p) => p.name.toLowerCase() === 'guest')
+  let guestProfile: Profile
+
+  if (guestIndex >= 0) {
+    guestProfile = {
+      ...current[guestIndex],
+      gender: 'Male',
+      age_group: '10+ years',
+    }
+    current[guestIndex] = guestProfile
+    try {
+      localStorage.setItem(PROFILES_KEY, JSON.stringify(current))
+    } catch {
+      // ignore
+    }
+  } else if (current.length === 0) {
+    guestProfile = {
+      id: `prof_${Date.now()}`,
+      name: 'Guest',
+      gender: 'Male',
+      age_group: '10+ years',
+      createdAt: Date.now(),
+    }
+    try {
+      localStorage.setItem(PROFILES_KEY, JSON.stringify([guestProfile]))
+    } catch {
+      // ignore
+    }
+  } else {
+    guestProfile = {
+      id: `prof_${Date.now()}`,
+      name: 'Guest',
+      gender: 'Male',
+      age_group: '10+ years',
+      createdAt: Date.now(),
+    }
+    try {
+      localStorage.setItem(PROFILES_KEY, JSON.stringify([guestProfile, ...current.slice(1)]))
+    } catch {
+      // ignore
+    }
+  }
+
+  setActiveProfileName(guestProfile.name)
+  return guestProfile
+}
+
 export function getActiveProfile(): Profile | null {
   if (typeof window === 'undefined') return null
   try {

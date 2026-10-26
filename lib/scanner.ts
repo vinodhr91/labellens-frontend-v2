@@ -5,7 +5,7 @@ export const GENDERS = ['Female', 'Male'] as const
 export const AGE_GROUPS = ['under-2', '1-3', '4-6', '7-9', '10+'] as const
 
 export type Gender = (typeof GENDERS)[number] | 'Boy' | 'Girl' | 'Man' | 'Woman'
-export type AgeGroup = (typeof AGE_GROUPS)[number]
+export type AgeGroup = (typeof AGE_GROUPS)[number] | '10+ years'
 
 export function isFemaleGender(g: string): boolean {
   const s = (g || '').toLowerCase().trim()

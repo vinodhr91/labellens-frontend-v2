@@ -6,6 +6,7 @@ import { ChevronDown, ArrowRight, Lock, Plus, User, UserCheck, Users } from 'luc
 import Image from 'next/image'
 import { AGE_GROUPS, GENDERS, isFemaleGender, type AgeGroup, type Gender } from '@/lib/scanner'
 import {
+  createDefaultGuestProfile,
   getStoredProfiles,
   saveStoredProfile,
   setActiveProfileName,
@@ -32,7 +33,7 @@ const CYCLE_AVATARS = [
 function lockedAvatarFor(gender: Gender | '', age: AgeGroup | '') {
   if (!gender) return null
   const female = isFemaleGender(gender)
-  const isAdult = age === '10+'
+  const isAdult = age === '10+' || age === '10+ years'
 
   if (female) {
     return isAdult
@@ -181,6 +182,17 @@ export function StepOnboarding({
 
     setActiveProfileName(finalName)
     if (onProfileChange) onProfileChange(finalName)
+    onNext()
+  }
+
+  // Handle "Skip for now" - generate default Guest profile and proceed to Scan
+  const handleSkipForNow = () => {
+    const guest = createDefaultGuestProfile()
+    setProfileName(guest.name)
+    onGenderChange('Male')
+    onAgeGroupChange(guest.age_group as AgeGroup)
+    if (onProfileChange) onProfileChange(guest.name)
+    if (onProfileLockedChange) onProfileLockedChange(true)
     onNext()
   }
 
@@ -362,6 +374,18 @@ export function StepOnboarding({
         Next: Scan Food Label
         <ArrowRight className="size-6" strokeWidth={3} aria-hidden="true" />
       </ToyButton>
+
+      {/* Skip Profile Setup: Clear text button at the bottom */}
+      <div className="flex flex-col items-center justify-center -mt-1 pb-1">
+        <button
+          type="button"
+          onClick={handleSkipForNow}
+          className="toy-press font-display text-sm sm:text-base font-bold text-toy-ink/75 hover:text-toy-ink underline decoration-2 underline-offset-4 transition-all cursor-pointer py-1.5 px-3 rounded-lg hover:bg-black/5"
+          aria-label="Skip profile setup and continue as Guest"
+        >
+          Skip for now
+        </button>
+      </div>
 
       {/* Freemium Paywall Modal */}
       <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
