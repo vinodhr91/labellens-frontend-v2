@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, ArrowLeft, ChevronDown, Loader2, Plus, ScanLine, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronDown, Info, Loader2, Plus, ScanLine, X } from 'lucide-react'
 import { API_URL, isFemaleGender, type AgeGroup, type AnalysisResult, type Gender } from '@/lib/scanner'
+
+type Layout = 'same' | 'separate' | null
 import {
   getStoredProfiles,
   getActiveProfileName,
@@ -75,6 +77,7 @@ export function StepUpload({
   const [storedProfiles, setStoredProfiles] = useState<Profile[]>([])
 
   const [scanMode, setScanMode] = useState<'single' | 'compare'>('single')
+  const [layout, setLayout] = useState<Layout>(null)
   const [image1, setImage1] = useState<PickedImage | null>(null)
   const [image2, setImage2] = useState<PickedImage | null>(null)
   const [loading, setLoading] = useState(false)
@@ -164,7 +167,7 @@ export function StepUpload({
 
   const canScan =
     scanMode === 'single'
-      ? !!image1 && !loading
+      ? !!image1 && (layout === 'same' || (layout === 'separate' && !!image2)) && !loading
       : !!image1 && !!image2 && !loading
 
   const handleRequestCancelScan = (action: () => void) => {
@@ -195,6 +198,7 @@ export function StepUpload({
   async function handleScan() {
     if (!image1 || loading) return
     if (scanMode === 'compare' && !image2) return
+    if (scanMode === 'single' && layout === 'separate' && !image2) return
 
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -211,8 +215,9 @@ export function StepUpload({
       form.append('age_group', normalizedAge)
       form.append('gender', gender)
       form.append('profile_name', currentProfileName || 'Default Profile')
+      form.append('scan_mode', scanMode)
       form.append('image1', image1.file)
-      if (scanMode === 'compare' && image2) {
+      if (image2) {
         form.append('image2', image2.file)
       }
 
@@ -276,7 +281,9 @@ export function StepUpload({
           onClick={() => {
             if (loading) return
             setScanMode('single')
-            setImage2(null)
+            if (layout !== 'separate') {
+              setImage2(null)
+            }
           }}
           className={`toy-press flex flex-col items-center justify-center gap-1.5 rounded-2xl border-4 border-toy-ink p-3.5 sm:p-4 text-center transition-all ${
             loading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
@@ -343,24 +350,83 @@ export function StepUpload({
             transition={{ duration: 0.2 }}
             className="flex flex-col gap-4"
           >
-            <div className="toy-block p-4 text-center">
-              <h2 id="upload-title" className="font-display text-xl sm:text-2xl font-bold leading-tight text-toy-ink text-balance">
-                Snap or upload the nutrition label
+            {/* Same Side vs Separate Sides Question Card */}
+            <div className="toy-block flex flex-col gap-3.5 p-4 sm:p-5">
+              <h2 id="upload-title" className="font-display text-lg sm:text-xl font-bold leading-tight text-toy-ink text-balance text-center sm:text-left">
+                Are the Ingredients and Nutrition Facts on the same side of the packet?
               </h2>
-              <p className="mt-1 text-xs sm:text-sm font-semibold text-muted-foreground text-pretty">
-                Make sure the nutrition table and ingredients list are clearly visible.
+              <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-labelledby="upload-title">
+                <ChoiceButton
+                  active={layout === 'same'}
+                  onClick={() => {
+                    if (loading) return
+                    setLayout('same')
+                    setImage2(null)
+                  }}
+                  color="bg-toy-green"
+                >
+                  Yes, Same Side
+                </ChoiceButton>
+                <ChoiceButton
+                  active={layout === 'separate'}
+                  onClick={() => {
+                    if (loading) return
+                    setLayout('separate')
+                  }}
+                  color="bg-toy-orange"
+                >
+                  No, Separate Sides
+                </ChoiceButton>
+              </div>
+              <p className="flex items-start gap-2 rounded-xl bg-[#eef8ff] p-2.5 text-xs sm:text-sm font-semibold text-toy-ink/75">
+                <Info className="mt-0.5 size-4 shrink-0 text-toy-ink" aria-hidden="true" />
+                <span>If both are on the same side, just upload one photo. If on different sides, upload photos of both.</span>
               </p>
             </div>
 
-            <UploadBox
-              id="single-label"
-              label="Product Label Photo"
-              hint="Nutrition table + Ingredients list"
-              value={image1}
-              onChange={setImage1}
-              isScanning={loading}
-              onRequestCancelScan={handleRequestCancelScan}
-            />
+            {/* Upload Boxes based on user choice */}
+            <AnimatePresence mode="wait">
+              {layout && (
+                <motion.div
+                  key={`boxes-${layout}`}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex flex-col gap-4"
+                >
+                  <UploadBox
+                    id="image1"
+                    label={layout === 'same' ? 'Product Label Photo' : 'Ingredients Side'}
+                    hint={layout === 'same' ? 'Nutrition table + Ingredients list' : 'Photo of the ingredients list'}
+                    value={image1}
+                    onChange={setImage1}
+                    isScanning={loading}
+                    onRequestCancelScan={handleRequestCancelScan}
+                  />
+
+                  {layout === 'separate' && (
+                    <motion.div
+                      key="image2-box"
+                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                    >
+                      <UploadBox
+                        id="image2"
+                        label="Nutrition Facts Side"
+                        hint="Photo of the nutrition table"
+                        value={image2}
+                        onChange={setImage2}
+                        isScanning={loading}
+                        onRequestCancelScan={handleRequestCancelScan}
+                      />
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         ) : (
           <motion.div
@@ -905,5 +971,33 @@ export function StepUpload({
         )}
       </AnimatePresence>
     </section>
+  )
+}
+
+function ChoiceButton({
+  active,
+  color,
+  children,
+  onClick,
+}: {
+  active: boolean
+  color: string
+  children: React.ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      className={`toy-press font-display min-h-16 sm:min-h-20 rounded-2xl border-4 border-toy-ink px-3 py-3 text-base sm:text-lg font-bold leading-tight transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-toy-yellow shadow-[0_3px_0_0_var(--toy-ink)] ${
+        active
+          ? `${color} text-white shadow-[0_4px_0_0_var(--toy-ink)] scale-[1.02]`
+          : 'bg-white text-toy-ink hover:bg-[#fffef0]'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
