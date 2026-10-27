@@ -824,18 +824,20 @@ export function StepResults({
               </button>
             </motion.div>
 
-            {/* Share on WhatsApp Button */}
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <a
-                href={whatsappShareUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink bg-[#25D366] py-3.5 text-base sm:text-lg font-bold text-white shadow-[0_4px_0_0_var(--toy-ink)] hover:brightness-105 transition-all cursor-pointer text-center"
-              >
-                <WhatsAppIcon className="size-6 fill-white shrink-0" />
-                <span>Share on WhatsApp</span>
-              </a>
-            </motion.div>
+            {/* Share on WhatsApp Button (only visible if nutrition data was found) */}
+            {!hasNoNutritionDataA && (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <a
+                  href={whatsappShareUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink bg-[#25D366] py-3.5 text-base sm:text-lg font-bold text-white shadow-[0_4px_0_0_var(--toy-ink)] hover:brightness-105 transition-all cursor-pointer text-center"
+                >
+                  <WhatsAppIcon className="size-6 fill-white shrink-0" />
+                  <span>Share on WhatsApp</span>
+                </a>
+              </motion.div>
+            )}
           </div>
 
           {!hasNoNutritionDataA && productA.other_nutrients && (
