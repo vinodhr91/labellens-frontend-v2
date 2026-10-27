@@ -211,6 +211,23 @@ function calculateNutrients(
   }
 }
 
+function checkHasNoNutritionData(
+  productData?: ProductAnalysis | null,
+  calcs?: { sugarGrams: number; satFatGrams: number; sodiumMg: number } | null
+): boolean {
+  if (!productData) return false
+  const b = (productData.breakdown || {}) as Record<string, any>
+  const sugarPct = toNumber(b.sugar?.percentage ?? 0)
+  const satFatPct = toNumber(b.sat_fat?.percentage ?? b.saturated_fat?.percentage ?? 0)
+  const sodiumPct = toNumber(b.sodium?.percentage ?? 0)
+
+  const isBreakdownZero = sugarPct === 0 && satFatPct === 0 && sodiumPct === 0
+  if (calcs) {
+    return isBreakdownZero && calcs.sugarGrams === 0 && calcs.satFatGrams === 0 && calcs.sodiumMg === 0
+  }
+  return isBreakdownZero
+}
+
 function getFlaggedIngredientsList(hidden?: (HiddenIngredientItem | string)[]): string {
   if (!hidden || !Array.isArray(hidden) || hidden.length === 0) return 'None'
   const names: string[] = []
@@ -247,11 +264,24 @@ function buildWhatsAppShareUrl(
     satFatGrams: number
     sodiumMg: number
   },
-  demographic: string
+  demographic: string,
+  hasNoNutritionData?: boolean
 ): string {
   const rawName = (productData.product || '').trim()
   const isUnknown = !rawName || rawName.toLowerCase() === 'unknown'
   const shareProductName = isUnknown ? 'a packaged food item' : rawName
+  const flaggedText = getFlaggedIngredientsList(productData.hidden_ingredients)
+
+  if (hasNoNutritionData) {
+    const lines = [
+      `🍔 ${shareProductName}`,
+      `⚠️ Nutrition table not found on this label. Check ingredients manually.`,
+      `🔍 Flagged ingredients: ${flaggedText}`,
+      '',
+      'Check your kitchen here: https://foodlabel-lens.vercel.app/',
+    ]
+    return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`
+  }
 
   let worstMetricName = 'Sugar'
   let worstPct = calcs.sugarPct
@@ -266,8 +296,6 @@ function buildWhatsAppShareUrl(
     worstPct = calcs.sodiumPct
     amountLine = `🥄 That's ${calcs.sodiumMg}mg sodium.`
   }
-
-  const flaggedText = getFlaggedIngredientsList(productData.hidden_ingredients)
 
   const lines = [
     `🍔 ${shareProductName}`,
@@ -375,6 +403,10 @@ export function StepResults({
   const totalServingsA = getProductTotalServings(productA)
   const totalServingsB = productB ? getProductTotalServings(productB) : null
 
+  // Check if all metrics are 0 (e.g., no nutrition table found on label)
+  const hasNoNutritionDataA = checkHasNoNutritionData(productA, calcsA)
+  const hasNoNutritionDataB = productB && calcsB ? checkHasNoNutritionData(productB, calcsB) : false
+
   // One-Glance Summaries
   const hiddenCountA = productA.hidden_ingredients?.length || 0
   const oneGlanceSummaryA = generateOneGlanceSummary(calcsA, hiddenCountA)
@@ -383,7 +415,7 @@ export function StepResults({
   const oneGlanceSummaryB = calcsB ? generateOneGlanceSummary(calcsB, hiddenCountB) : ''
 
   // WhatsApp Share Link (Intelligent Fallback Name & Worst Metric Highlighting)
-  const whatsappShareUrl = buildWhatsAppShareUrl(productA, calcsA, limits.name)
+  const whatsappShareUrl = buildWhatsAppShareUrl(productA, calcsA, limits.name, hasNoNutritionDataA)
 
   // "How Much Did You Eat?" portion modal state
   const [portionModal, setPortionModal] = useState<{
@@ -689,47 +721,60 @@ export function StepResults({
             </div>
           )}
 
-          {/* Verdict Banner */}
-          <VerdictStamp verdict={calcsA.dynamicVerdict} />
+          {hasNoNutritionDataA ? (
+            <div className="toy-block flex flex-col items-center gap-3 p-5 sm:p-6 text-center bg-[#fffef0] border-4 border-toy-ink shadow-[0_4px_0_0_var(--toy-ink)]">
+              <div className="font-display w-full rounded-2xl border-3 border-toy-ink bg-toy-yellow px-4 py-3.5 text-center text-lg sm:text-xl font-black uppercase tracking-wide text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)]">
+                ⚠️ NUTRITION DATA NOT FOUND
+              </div>
+              <p className="font-display text-sm sm:text-base font-semibold text-toy-ink/90 leading-relaxed px-1 text-balance">
+                We couldn&apos;t read a nutrition table from this label. Please check the ingredients list manually for hidden sugars or salts.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Verdict Banner */}
+              <VerdictStamp verdict={calcsA.dynamicVerdict} />
 
-          {/* Bold One-Glance Summary (Right under Verdict Banner) */}
-          <div className="rounded-2xl border-3 border-toy-ink bg-white/95 px-4 py-2.5 text-center shadow-[0_3px_0_0_var(--toy-ink)]">
-            <p className="font-display text-sm sm:text-base font-bold text-toy-ink leading-snug">
-              {oneGlanceSummaryA}
-            </p>
-          </div>
+              {/* Bold One-Glance Summary (Right under Verdict Banner) */}
+              <div className="rounded-2xl border-3 border-toy-ink bg-white/95 px-4 py-2.5 text-center shadow-[0_3px_0_0_var(--toy-ink)]">
+                <p className="font-display text-sm sm:text-base font-bold text-toy-ink leading-snug">
+                  {oneGlanceSummaryA}
+                </p>
+              </div>
 
-          {/* Sugar Jar with Whole Pack view if net weight exists */}
-          <SugarBottle
-            percentage={calcsA.sugarPct}
-            teaspoons={calcsA.sugarTeaspoons}
-            grams={calcsA.sugarGrams}
-            limitG={
-              isWhatIf
-                ? limits.sugar
-                : ((productA.breakdown?.sugar as any)?.limit_g ?? limits.sugar)
-            }
-            wholePackTeaspoons={wholePackA?.sugarTsp ?? null}
-          />
+              {/* Sugar Jar with Whole Pack view if net weight exists */}
+              <SugarBottle
+                percentage={calcsA.sugarPct}
+                teaspoons={calcsA.sugarTeaspoons}
+                grams={calcsA.sugarGrams}
+                limitG={
+                  isWhatIf
+                    ? limits.sugar
+                    : ((productA.breakdown?.sugar as any)?.limit_g ?? limits.sugar)
+                }
+                wholePackTeaspoons={wholePackA?.sugarTsp ?? null}
+              />
 
-          <div className="grid grid-cols-2 gap-4">
-            <MiniMeter
-              label="Saturated Fat"
-              shape="tube"
-              percentage={calcsA.satFatPct}
-              delay={0.15}
-              detail={ratio(calcsA.satFatGrams, limits.satFat, 'g')}
-              wholePackText={wholePackA ? `Whole Pack: ${wholePackA.satFatGrams}g` : null}
-            />
-            <MiniMeter
-              label="Sodium"
-              shape="salt"
-              percentage={calcsA.sodiumPct}
-              delay={0.25}
-              detail={ratio(calcsA.sodiumMg, limits.sodium, 'mg')}
-              wholePackText={wholePackA ? `Whole Pack: ${wholePackA.sodiumMg}mg` : null}
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <MiniMeter
+                  label="Saturated Fat"
+                  shape="tube"
+                  percentage={calcsA.satFatPct}
+                  delay={0.15}
+                  detail={ratio(calcsA.satFatGrams, limits.satFat, 'g')}
+                  wholePackText={wholePackA ? `Whole Pack: ${wholePackA.satFatGrams}g` : null}
+                />
+                <MiniMeter
+                  label="Sodium"
+                  shape="salt"
+                  percentage={calcsA.sodiumPct}
+                  delay={0.25}
+                  detail={ratio(calcsA.sodiumMg, limits.sodium, 'mg')}
+                  wholePackText={wholePackA ? `Whole Pack: ${wholePackA.sodiumMg}mg` : null}
+                />
+              </div>
+            </>
+          )}
 
           {/* Action Buttons: Add to Plate & Share on WhatsApp */}
           <div className="flex flex-col gap-3">
@@ -1319,6 +1364,7 @@ function CompareProductColumn({
 }) {
   const [added, setAdded] = useState(false)
   const hiddenCount = productData.hidden_ingredients?.length || 0
+  const hasNoData = checkHasNoNutritionData(productData, calcs)
 
   return (
     <div className="toy-block flex flex-col justify-between gap-2.5 p-2.5 sm:p-3.5 bg-white shadow-md">
@@ -1339,13 +1385,26 @@ function CompareProductColumn({
           {productData.product || tag}
         </h3>
 
-        {/* Compact Verdict Badge at top of column */}
-        <CompactVerdictBadge verdict={calcs.dynamicVerdict} />
+        {hasNoData ? (
+          <div className="toy-block flex flex-col items-center gap-1.5 p-2 text-center bg-[#fffef0] border-2 border-toy-ink my-1">
+            <div className="font-display w-full rounded-md border-2 border-toy-ink bg-toy-yellow px-1.5 py-1 text-center text-[10px] sm:text-xs font-black uppercase tracking-wide text-toy-ink shadow-[0_1.5px_0_0_var(--toy-ink)]">
+              ⚠️ NUTRITION DATA NOT FOUND
+            </div>
+            <p className="text-[10px] sm:text-[11px] font-semibold text-toy-ink/85 leading-tight">
+              We couldn&apos;t read a nutrition table from this label. Check ingredients manually.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Compact Verdict Badge at top of column */}
+            <CompactVerdictBadge verdict={calcs.dynamicVerdict} />
 
-        {/* Dynamic One-Glance Summary for this Product */}
-        <p className="font-display text-[10px] font-bold text-toy-ink leading-tight text-balance bg-[#fefcf3] p-1.5 rounded-lg border border-toy-ink/30">
-          {summary}
-        </p>
+            {/* Dynamic One-Glance Summary for this Product */}
+            <p className="font-display text-[10px] font-bold text-toy-ink leading-tight text-balance bg-[#fefcf3] p-1.5 rounded-lg border border-toy-ink/30">
+              {summary}
+            </p>
+          </>
+        )}
 
         {productData.serving_size && (
           <span className="text-[9px] sm:text-[10px] font-semibold text-muted-foreground truncate">
@@ -1355,46 +1414,48 @@ function CompareProductColumn({
       </div>
 
       {/* Middle: Compact Horizontal Progress Bars */}
-      <div className="flex flex-col gap-2 pt-0.5">
-        <CompactNutrientBar
-          icon="🍬"
-          label="Sugar"
-          valueText={`${calcs.sugarGrams}g (${calcs.sugarTeaspoons} tsp)`}
-          pct={calcs.sugarPct}
-          delay={0.1}
-        />
-        {wholePack?.sugarTsp != null && wholePack.sugarTsp > 0 && (
-          <div className="text-[9px] font-bold text-toy-red text-right -mt-1">
-            Whole Pack: {wholePack.sugarTsp} tsp
-          </div>
-        )}
+      {!hasNoData && (
+        <div className="flex flex-col gap-2 pt-0.5">
+          <CompactNutrientBar
+            icon="🍬"
+            label="Sugar"
+            valueText={`${calcs.sugarGrams}g (${calcs.sugarTeaspoons} tsp)`}
+            pct={calcs.sugarPct}
+            delay={0.1}
+          />
+          {wholePack?.sugarTsp != null && wholePack.sugarTsp > 0 && (
+            <div className="text-[9px] font-bold text-toy-red text-right -mt-1">
+              Whole Pack: {wholePack.sugarTsp} tsp
+            </div>
+          )}
 
-        <CompactNutrientBar
-          icon="🧈"
-          label="Sat Fat"
-          valueText={`${calcs.satFatGrams}g / ${limits.satFat}g`}
-          pct={calcs.satFatPct}
-          delay={0.2}
-        />
-        {wholePack?.satFatGrams != null && wholePack.satFatGrams > 0 && (
-          <div className="text-[9px] font-bold text-toy-ink/75 text-right -mt-1">
-            Whole Pack: {wholePack.satFatGrams}g
-          </div>
-        )}
+          <CompactNutrientBar
+            icon="🧈"
+            label="Sat Fat"
+            valueText={`${calcs.satFatGrams}g / ${limits.satFat}g`}
+            pct={calcs.satFatPct}
+            delay={0.2}
+          />
+          {wholePack?.satFatGrams != null && wholePack.satFatGrams > 0 && (
+            <div className="text-[9px] font-bold text-toy-ink/75 text-right -mt-1">
+              Whole Pack: {wholePack.satFatGrams}g
+            </div>
+          )}
 
-        <CompactNutrientBar
-          icon="🧂"
-          label="Sodium"
-          valueText={`${calcs.sodiumMg}mg / ${limits.sodium}mg`}
-          pct={calcs.sodiumPct}
-          delay={0.3}
-        />
-        {wholePack?.sodiumMg != null && wholePack.sodiumMg > 0 && (
-          <div className="text-[9px] font-bold text-toy-ink/75 text-right -mt-1">
-            Whole Pack: {wholePack.sodiumMg}mg
-          </div>
-        )}
-      </div>
+          <CompactNutrientBar
+            icon="🧂"
+            label="Sodium"
+            valueText={`${calcs.sodiumMg}mg / ${limits.sodium}mg`}
+            pct={calcs.sodiumPct}
+            delay={0.3}
+          />
+          {wholePack?.sodiumMg != null && wholePack.sodiumMg > 0 && (
+            <div className="text-[9px] font-bold text-toy-ink/75 text-right -mt-1">
+              Whole Pack: {wholePack.sodiumMg}mg
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Hidden count badge (if any) */}
       {hiddenCount > 0 && (
