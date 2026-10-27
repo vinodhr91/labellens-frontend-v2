@@ -131,6 +131,16 @@ export function ScannerApp() {
               <StepResults
                 result={result}
                 profileName={profileName}
+                onProfileChange={(newProfName) => {
+                  setProfileName(newProfName)
+                  const profiles = getStoredProfiles()
+                  const active = profiles.find((p) => p.name.toLowerCase() === newProfName.toLowerCase())
+                  if (active) {
+                    if (active.gender) setGender(active.gender as Gender)
+                    if (active.age_group) setAgeGroup(active.age_group as AgeGroup)
+                  }
+                  syncData()
+                }}
                 onRestart={() => {
                   setResult(null)
                   setStep(2)

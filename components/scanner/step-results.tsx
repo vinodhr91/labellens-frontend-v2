@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, CheckCircle2, ChevronDown, Minus, Plus, RotateCcw, Utensils, Users, X } from 'lucide-react'
-import { findMetric, toNumber, type AnalysisResult, type HiddenIngredientItem, type ProductAnalysis } from '@/lib/scanner'
-import { addProductToProfilePlate, getActiveProfile, getActiveProfileName } from '@/lib/storage'
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, Minus, Plus, RotateCcw, Utensils, Users, X } from 'lucide-react'
+import { findMetric, toNumber, type AgeGroup, type AnalysisResult, type Gender, type HiddenIngredientItem, type ProductAnalysis } from '@/lib/scanner'
+import { addProductToProfilePlate, getActiveProfile, getActiveProfileName, getStoredProfiles, saveStoredProfile, setActiveProfileName, type Profile } from '@/lib/storage'
 import { ToyButton } from './toy-button'
 import { VerdictStamp } from './verdict-stamp'
 import { SugarBottle } from './sugar-bottle'
@@ -13,6 +13,7 @@ import { NutrientsGrid } from './nutrients-grid'
 import { HiddenIngredients } from './hidden-ingredients'
 import { Citations } from './citations'
 import { Feedback } from './feedback'
+import { PaywallModal } from './paywall-modal'
 
 function ratio(value: unknown, limit: unknown, unit: string) {
   const has = (v: unknown) => v != null && v !== ''
@@ -286,15 +287,45 @@ export function StepResults({
   onRestart,
   onViewPlate,
   onPlateUpdated,
+  onProfileChange,
 }: {
   result: AnalysisResult
   profileName?: string
   onRestart: () => void
   onViewPlate?: () => void
   onPlateUpdated?: () => void
+  onProfileChange?: (name: string) => void
 }) {
-  const profileName = initialProfileName || getActiveProfileName()
+  const [currentProfileName, setCurrentProfileName] = useState<string>(
+    initialProfileName || getActiveProfileName()
+  )
   const activeProfile = getActiveProfile()
+
+  // Guest Profile Intercept Modal State
+  const [showProfileSelectModal, setShowProfileSelectModal] = useState(false)
+  const [profileModalMode, setProfileModalMode] = useState<'select' | 'create'>('select')
+  const [selectedProfileDropdown, setSelectedProfileDropdown] = useState<string>('')
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [pendingPortionArgs, setPendingPortionArgs] = useState<{
+    productName: string
+    sugarGrams: number
+    satFatGrams: number
+    sodiumMg: number
+    servingSize?: string
+    totalServings: number | null
+  } | null>(null)
+
+  // Create Profile form state
+  const [newName, setNewName] = useState('')
+  const [newGender, setNewGender] = useState<Gender>('Female')
+  const [newAgeGroup, setNewAgeGroup] = useState<AgeGroup>('10+')
+
+  const savedProfilesList = getStoredProfiles().filter((p) => p.name.toLowerCase() !== 'guest')
+
+  const isGuestProfile = (name?: string) => {
+    const s = (name || currentProfileName || '').trim().toLowerCase()
+    return !s || s === 'guest'
+  }
 
   // Category of the active profile (1-3, 4-6, 7-9, 10+)
   const profileAgeBracket: AgeBracket = (() => {
@@ -320,7 +351,7 @@ export function StepResults({
   const isWhatIf = selectedAgeBracket !== profileAgeBracket
   const badgeText = isWhatIf
     ? `Breakdown for: ${limits.name} (What-If)`
-    : `Breakdown for: ${profileName}`
+    : `Breakdown for: ${currentProfileName}`
 
   // Toast message
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -375,7 +406,8 @@ export function StepResults({
     sodiumMg: number,
     servingSize?: string
   ) => {
-    const res = addProductToProfilePlate(profileName, {
+    const target = currentProfileName || getActiveProfileName()
+    const res = addProductToProfilePlate(target, {
       product: productName || 'Scanned Food Product',
       serving_size: servingSize,
       sugar_g: sugarG,
@@ -384,9 +416,52 @@ export function StepResults({
     })
 
     if (res.success) {
-      setToastMessage(`🍽️ Added "${productName}" to ${profileName}'s Plate! (${res.totalItems} items today)`)
+      setToastMessage(`🍽️ Added "${productName}" to ${target}'s Plate! (${res.totalItems} items today)`)
       if (onPlateUpdated) onPlateUpdated()
       setTimeout(() => setToastMessage(null), 4000)
+    }
+  }
+
+  const handleProfileSelectSave = (targetProfileName: string) => {
+    if (!targetProfileName) return
+
+    setActiveProfileName(targetProfileName)
+    setCurrentProfileName(targetProfileName)
+    if (onProfileChange) onProfileChange(targetProfileName)
+    if (onPlateUpdated) onPlateUpdated()
+    setShowProfileSelectModal(false)
+
+    if (pendingPortionArgs) {
+      setSelectedServings(1)
+      setPortionModal({
+        productName: pendingPortionArgs.productName,
+        sugarGrams: pendingPortionArgs.sugarGrams,
+        satFatGrams: pendingPortionArgs.satFatGrams,
+        sodiumMg: pendingPortionArgs.sodiumMg,
+        servingSize: pendingPortionArgs.servingSize,
+        totalServings: pendingPortionArgs.totalServings,
+      })
+      setPendingPortionArgs(null)
+    }
+  }
+
+  const handleCreateProfileSubmit = () => {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+
+    const res = saveStoredProfile({
+      name: trimmed,
+      gender: newGender,
+      age_group: newAgeGroup,
+    })
+
+    if (res.paywall) {
+      setShowPaywall(true)
+      return
+    }
+
+    if (res.profile) {
+      handleProfileSelectSave(res.profile.name)
     }
   }
 
@@ -398,6 +473,30 @@ export function StepResults({
     servingSize?: string,
     totalServings?: number | null
   ) => {
+    // Intercept if active profile is 'Guest' or not created
+    if (isGuestProfile(currentProfileName)) {
+      setPendingPortionArgs({
+        productName: productName || 'Scanned Food Product',
+        sugarGrams,
+        satFatGrams,
+        sodiumMg,
+        servingSize,
+        totalServings: totalServings && totalServings > 1 ? totalServings : null,
+      })
+
+      const all = getStoredProfiles()
+      const nonGuest = all.filter((p) => p.name.toLowerCase() !== 'guest')
+      if (nonGuest.length > 0) {
+        setSelectedProfileDropdown(nonGuest[0].name)
+        setProfileModalMode('select')
+      } else {
+        setSelectedProfileDropdown('')
+        setProfileModalMode('select')
+      }
+      setShowProfileSelectModal(true)
+      return
+    }
+
     setSelectedServings(1)
     setPortionModal({
       productName: productName || 'Scanned Food Product',
@@ -658,12 +757,17 @@ export function StepResults({
                 {singleAdded ? (
                   <>
                     <Check className="size-6 stroke-[3]" />
-                    <span>Added to {profileName}&apos;s Plate!</span>
+                    <span>Added to {currentProfileName}&apos;s Plate!</span>
                   </>
                 ) : (
                   <>
                     <Utensils className="size-6 stroke-[2.5]" />
-                    <span>🍽️ Add to {profileName}&apos;s Plate</span>
+                    <span>
+                      🍽️ Add to{' '}
+                      {currentProfileName.toLowerCase() === 'guest'
+                        ? 'My Plate'
+                        : `${currentProfileName}'s Plate`}
+                    </span>
                   </>
                 )}
               </button>
@@ -750,7 +854,7 @@ export function StepResults({
 
                 {isWhatIf && (
                   <div className="mt-3 rounded-xl border-2 border-toy-ink bg-toy-yellow/20 px-3 py-1.5 text-xs font-bold text-toy-ink">
-                    ⚠️ Logging to <strong>{profileName}&apos;s Plate</strong>
+                    ⚠️ Logging to <strong>{currentProfileName}&apos;s Plate</strong>
                   </div>
                 )}
 
@@ -836,6 +940,256 @@ export function StepResults({
           )
         })()}
       </AnimatePresence>
+
+      {/* Intercept Modal: Select or Create Profile when active profile is Guest */}
+      <AnimatePresence>
+        {showProfileSelectModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-toy-ink/65 backdrop-blur-xs"
+            onClick={() => {
+              setShowProfileSelectModal(false)
+              setPendingPortionArgs(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 25 }}
+              className="toy-block relative w-full max-w-sm bg-white p-5 shadow-2xl text-left"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="select-profile-modal-title"
+            >
+              {profileModalMode === 'select' ? (
+                <>
+                  <div className="flex items-center justify-between pb-3 border-b-2 border-toy-ink/15">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">🍽️</span>
+                      <h4 id="select-profile-modal-title" className="font-display text-lg font-bold text-toy-ink">
+                        Select a Profile
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileSelectModal(false)
+                        setPendingPortionArgs(null)
+                      }}
+                      className="flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink hover:scale-105 cursor-pointer"
+                      aria-label="Close"
+                    >
+                      <X className="size-4" strokeWidth={3} />
+                    </button>
+                  </div>
+
+                  <p className="mt-3 text-sm font-semibold text-toy-ink/80 leading-snug">
+                    To track your daily intake, please select a profile.
+                  </p>
+
+                  {/* Dropdown of Saved Profiles */}
+                  <div className="mt-4 flex flex-col gap-1.5">
+                    <label
+                      htmlFor="profile-select-dropdown"
+                      className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink"
+                    >
+                      Saved Profiles
+                    </label>
+                    {savedProfilesList.length > 0 ? (
+                      <div className="relative">
+                        <select
+                          id="profile-select-dropdown"
+                          value={selectedProfileDropdown}
+                          onChange={(e) => setSelectedProfileDropdown(e.target.value)}
+                          className="font-display w-full appearance-none rounded-xl border-3 border-toy-ink bg-[#eef8ff] px-3.5 py-2.5 pr-8 text-sm font-bold text-toy-ink focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-toy-yellow cursor-pointer"
+                        >
+                          <option value="" disabled>
+                            -- Choose Profile --
+                          </option>
+                          {savedProfilesList.map((p) => (
+                            <option key={p.id || p.name} value={p.name}>
+                              {p.name} ({p.gender}, {p.age_group.includes('yr') || p.age_group.includes('year') ? p.age_group : `${p.age_group} yrs`})
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-toy-ink"
+                          strokeWidth={3}
+                          aria-hidden="true"
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border-2 border-dashed border-toy-ink/30 bg-muted/30 p-3 text-center text-xs font-medium text-toy-ink/70">
+                        No family profiles saved yet. Click below to create one!
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons: Save & Create New Profile */}
+                  <div className="mt-5 flex flex-col gap-2.5">
+                    {savedProfilesList.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={!selectedProfileDropdown}
+                        onClick={() => handleProfileSelectSave(selectedProfileDropdown)}
+                        className={`toy-press font-display flex w-full items-center justify-center gap-2 rounded-xl border-3 border-toy-ink bg-toy-yellow py-3 text-sm font-bold text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)] transition-all ${
+                          !selectedProfileDropdown ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-105 cursor-pointer'
+                        }`}
+                      >
+                        <Check className="size-4 stroke-[3]" />
+                        <span>Save</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (savedProfilesList.length >= 1) {
+                          setShowPaywall(true)
+                        } else {
+                          setProfileModalMode('create')
+                        }
+                      }}
+                      className="toy-press font-display flex w-full items-center justify-center gap-1.5 rounded-xl border-3 border-toy-ink bg-white py-2.5 text-xs sm:text-sm font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] hover:bg-toy-yellow/20 cursor-pointer"
+                    >
+                      <Plus className="size-4 stroke-[3]" />
+                      <span>+ Create New Profile</span>
+                      {savedProfilesList.length >= 1 && (
+                        <span className="rounded bg-toy-yellow px-1.5 py-0.2 text-[10px] font-black text-toy-ink border border-toy-ink">
+                          PRO
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* Mode: Create Profile */
+                <>
+                  <div className="flex items-center justify-between pb-3 border-b-2 border-toy-ink/15">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setProfileModalMode('select')}
+                        className="flex size-7 items-center justify-center rounded-full border-2 border-toy-ink bg-white text-toy-ink hover:bg-slate-100 cursor-pointer"
+                        aria-label="Back to selection"
+                      >
+                        <ArrowLeft className="size-4" strokeWidth={3} />
+                      </button>
+                      <h4 id="select-profile-modal-title" className="font-display text-lg font-bold text-toy-ink">
+                        Create Profile
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileSelectModal(false)
+                        setPendingPortionArgs(null)
+                      }}
+                      className="flex size-8 items-center justify-center rounded-full border-2 border-toy-ink bg-muted text-toy-ink hover:scale-105 cursor-pointer"
+                      aria-label="Close"
+                    >
+                      <X className="size-4" strokeWidth={3} />
+                    </button>
+                  </div>
+
+                  <p className="mt-2 text-xs font-semibold text-toy-ink/75">
+                    To track your daily intake, please create a profile.
+                  </p>
+
+                  <div className="mt-3 flex flex-col gap-3">
+                    {/* Name input */}
+                    <div className="flex flex-col gap-1">
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink">
+                        Profile Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        placeholder="e.g., My Son"
+                        className="font-display w-full rounded-xl border-3 border-toy-ink bg-[#f8fbff] px-3 py-2 text-sm font-bold text-toy-ink focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-toy-yellow shadow-[0_2px_0_0_var(--toy-ink)]"
+                      />
+                    </div>
+
+                    {/* Gender */}
+                    <div className="flex flex-col gap-1">
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink">
+                        Gender
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['Male', 'Female'] as const).map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => setNewGender(g)}
+                            className={`toy-press rounded-xl border-2 border-toy-ink py-1.5 text-xs font-bold cursor-pointer transition-all ${
+                              newGender === g
+                                ? 'bg-toy-yellow text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] font-black'
+                                : 'bg-white text-toy-ink/70 hover:text-toy-ink'
+                            }`}
+                          >
+                            {g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Age Group */}
+                    <div className="flex flex-col gap-1">
+                      <label className="font-display text-xs font-bold uppercase tracking-wider text-toy-ink">
+                        Age Group
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={newAgeGroup}
+                          onChange={(e) => setNewAgeGroup(e.target.value as AgeGroup)}
+                          className="font-display w-full appearance-none rounded-xl border-2 border-toy-ink bg-[#eef8ff] px-3 py-2 pr-8 text-xs font-bold text-toy-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-toy-yellow cursor-pointer"
+                        >
+                          <option value="under-2">0 – 12 months</option>
+                          <option value="1-3">1 – 3 years</option>
+                          <option value="4-6">4 – 6 years</option>
+                          <option value="7-9">7 – 9 years</option>
+                          <option value="10+">10+ years</option>
+                        </select>
+                        <ChevronDown
+                          className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-toy-ink"
+                          strokeWidth={3}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Save & Cancel */}
+                    <div className="mt-2 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        disabled={!newName.trim()}
+                        onClick={handleCreateProfileSubmit}
+                        className={`toy-press font-display flex w-full items-center justify-center gap-1.5 rounded-xl border-3 border-toy-ink bg-toy-yellow py-2.5 text-sm font-bold text-toy-ink shadow-[0_3px_0_0_var(--toy-ink)] transition-all ${
+                          !newName.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-105 cursor-pointer'
+                        }`}
+                      >
+                        <Check className="size-4 stroke-[3]" />
+                        <span>Save</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfileModalMode('select')}
+                        className="font-display w-full rounded-xl border-2 border-toy-ink bg-muted py-1.5 text-xs font-bold text-toy-ink hover:bg-muted/80 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Paywall Modal */}
+      <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
 
       {/* Citations & Feedback */}
       {result.citations && result.citations.length > 0 && <Citations citations={result.citations} />}

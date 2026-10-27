@@ -49,9 +49,10 @@ export function saveStoredProfile(profile: {
 }): { success: boolean; paywall?: boolean; profile?: Profile } {
   if (typeof window === 'undefined') return { success: false }
   const current = getStoredProfiles()
+  const nonGuestProfiles = current.filter((p) => p.name.toLowerCase() !== 'guest')
 
-  // Allow one profile for free. If already 1 or more, trigger paywall
-  if (current.length >= 1) {
+  // Allow one real profile for free. If already 1 or more real profiles, trigger paywall
+  if (nonGuestProfiles.length >= 1) {
     return { success: false, paywall: true }
   }
 
@@ -63,7 +64,12 @@ export function saveStoredProfile(profile: {
     createdAt: Date.now(),
   }
 
-  const updated = [...current, newProfile]
+  // If the only profile was the automatic default 'Guest', replace it with this real profile
+  const updated =
+    current.length === 1 && current[0].name.toLowerCase() === 'guest'
+      ? [newProfile]
+      : [...nonGuestProfiles, newProfile]
+
   try {
     localStorage.setItem(PROFILES_KEY, JSON.stringify(updated))
     setActiveProfileName(newProfile.name)
