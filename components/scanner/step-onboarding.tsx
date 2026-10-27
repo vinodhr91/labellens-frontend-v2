@@ -69,7 +69,6 @@ export function StepOnboarding({
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null)
   const [showPaywall, setShowPaywall] = useState(false)
   const [cycleIndex, setCycleIndex] = useState(0)
-  const [isAnimationSkipped, setIsAnimationSkipped] = useState(false)
 
   // Load profiles from localStorage on mount (do NOT auto-populate gender/age so avatar cycles)
   useEffect(() => {
@@ -87,16 +86,16 @@ export function StepOnboarding({
     }
   }, [isLocked, onProfileLockedChange])
 
-  // Autocycle through avatars every 1.6s when unlocked and not skipped
+  // Autocycle through avatars every 1.6s when unlocked
   useEffect(() => {
-    if (isLocked || isAnimationSkipped) return
+    if (isLocked) return
 
     const interval = setInterval(() => {
       setCycleIndex((prev) => (prev + 1) % CYCLE_AVATARS.length)
     }, 1600)
 
     return () => clearInterval(interval)
-  }, [isLocked, isAnimationSkipped])
+  }, [isLocked])
 
   const lockedAvatar = lockedAvatarFor(gender, ageGroup)
   const currentAvatar = isLocked
@@ -255,12 +254,12 @@ export function StepOnboarding({
               <AnimatePresence mode="wait">
                 {currentAvatar && (
                   <motion.div
-                    key={isLocked ? `locked-${currentAvatar.src}` : isAnimationSkipped ? 'skipped-avatar' : `cycle-${cycleIndex}`}
-                    initial={isLocked || isAnimationSkipped ? { scale: 0.9, opacity: 0 } : { x: 50, opacity: 0, scale: 0.9 }}
+                    key={isLocked ? `locked-${currentAvatar.src}` : `cycle-${cycleIndex}`}
+                    initial={isLocked ? { scale: 0.9, opacity: 0 } : { x: 50, opacity: 0, scale: 0.9 }}
                     animate={{ scale: 1, rotate: 0, x: 0, opacity: 1 }}
-                    exit={isLocked || isAnimationSkipped ? { opacity: 0 } : { x: -50, opacity: 0, scale: 0.9 }}
+                    exit={isLocked ? { opacity: 0 } : { x: -50, opacity: 0, scale: 0.9 }}
                     transition={
-                      isLocked || isAnimationSkipped
+                      isLocked
                         ? { duration: 0.2 }
                         : { type: 'spring', stiffness: 320, damping: 24 }
                     }
@@ -291,26 +290,13 @@ export function StepOnboarding({
                 </motion.div>
               )}
             </div>
-
-            {/* Skip Animation Button right next to cycling avatars */}
-            {!isLocked && !isAnimationSkipped && (
-              <button
-                type="button"
-                onClick={() => setIsAnimationSkipped(true)}
-                className="toy-press absolute -right-3 sm:-right-8 top-3 sm:top-4 font-display flex items-center gap-1 rounded-full border-2 border-toy-ink bg-white px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-bold text-toy-ink shadow-[0_2px_0_0_var(--toy-ink)] hover:bg-toy-yellow hover:scale-105 transition-all cursor-pointer"
-                title="Stop avatar cycling animation"
-              >
-                <span>⏩</span>
-                <span>Skip Animation</span>
-              </button>
-            )}
           </div>
 
           {/* Subtitle text: 'Who are we checking this for?'. Hidden once profile is locked in */}
           <div className="min-h-6 pt-1">
             {!isLocked && (
               <p className="font-display text-sm font-bold text-toy-ink/75">
-                {isAnimationSkipped ? 'Select Gender and Age above' : 'Who are we checking this for?'}
+                Who are we checking this for?
               </p>
             )}
           </div>
