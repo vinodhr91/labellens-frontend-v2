@@ -679,10 +679,11 @@ export function StepResults({
             />
           </div>
 
-          {/* Hidden Ingredients summary if either product has flags */}
-          {(productA.hidden_ingredients?.length || productB.hidden_ingredients?.length) ? (
+          {/* Hidden Ingredients summary if either product has flags and valid nutrition data */}
+          {((!hasNoNutritionDataA && productA.hidden_ingredients?.length) ||
+            (!hasNoNutritionDataB && productB.hidden_ingredients?.length)) ? (
             <div className="flex flex-col gap-2">
-              {productA.hidden_ingredients && productA.hidden_ingredients.length > 0 && (
+              {!hasNoNutritionDataA && productA.hidden_ingredients && productA.hidden_ingredients.length > 0 && (
                 <div className="toy-block p-3 bg-white">
                   <p className="text-xs font-bold text-toy-ink mb-1 flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-toy-yellow border border-toy-ink" />
@@ -691,7 +692,7 @@ export function StepResults({
                   <HiddenIngredients hidden={productA.hidden_ingredients} raw={productA.raw_ingredients} />
                 </div>
               )}
-              {productB.hidden_ingredients && productB.hidden_ingredients.length > 0 && (
+              {!hasNoNutritionDataB && productB.hidden_ingredients && productB.hidden_ingredients.length > 0 && (
                 <div className="toy-block p-3 bg-white">
                   <p className="text-xs font-bold text-toy-ink mb-1 flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-[#eef8ff] border border-toy-ink" />
@@ -778,10 +779,13 @@ export function StepResults({
 
           {/* Action Buttons: Add to Plate & Share on WhatsApp */}
           <div className="flex flex-col gap-3">
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <motion.div whileHover={hasNoNutritionDataA ? undefined : { scale: 1.02 }} whileTap={hasNoNutritionDataA ? undefined : { scale: 0.98 }}>
               <button
                 type="button"
+                disabled={hasNoNutritionDataA}
+                title={hasNoNutritionDataA ? 'Nutrition data not found on label' : undefined}
                 onClick={() => {
+                  if (hasNoNutritionDataA) return
                   handleOpenPortionModal(
                     productA.product || 'Scanned Food Product',
                     calcsA.sugarGrams,
@@ -793,10 +797,12 @@ export function StepResults({
                   setSingleAdded(true)
                   setTimeout(() => setSingleAdded(false), 3000)
                 }}
-                className={`toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink py-4 text-lg font-bold shadow-[0_4px_0_0_var(--toy-ink)] transition-all cursor-pointer ${
-                  singleAdded
-                    ? 'bg-toy-green text-white'
-                    : 'bg-toy-yellow text-toy-ink hover:brightness-105'
+                className={`toy-press font-display flex w-full items-center justify-center gap-2.5 rounded-2xl border-4 border-toy-ink py-4 text-lg font-bold shadow-[0_4px_0_0_var(--toy-ink)] transition-all ${
+                  hasNoNutritionDataA
+                    ? 'bg-slate-200 text-toy-ink/40 border-toy-ink/40 shadow-none cursor-not-allowed opacity-60'
+                    : singleAdded
+                    ? 'bg-toy-green text-white cursor-pointer'
+                    : 'bg-toy-yellow text-toy-ink hover:brightness-105 cursor-pointer'
                 }`}
               >
                 {singleAdded ? (
@@ -832,9 +838,13 @@ export function StepResults({
             </motion.div>
           </div>
 
-          {productA.other_nutrients && <NutrientsGrid nutrients={productA.other_nutrients} />}
+          {!hasNoNutritionDataA && productA.other_nutrients && (
+            <NutrientsGrid nutrients={productA.other_nutrients} />
+          )}
 
-          <HiddenIngredients hidden={productA.hidden_ingredients} raw={productA.raw_ingredients} />
+          {!hasNoNutritionDataA && (
+            <HiddenIngredients hidden={productA.hidden_ingredients} raw={productA.raw_ingredients} />
+          )}
         </div>
       )}
 
@@ -1458,7 +1468,7 @@ function CompareProductColumn({
       )}
 
       {/* Hidden count badge (if any) */}
-      {hiddenCount > 0 && (
+      {!hasNoData && hiddenCount > 0 && (
         <div className="flex items-center justify-center pt-0.5">
           <span className="text-[9px] font-bold text-toy-red bg-toy-red/10 border border-toy-red/30 rounded-md px-1.5 py-0.5 truncate">
             ⚠️ {hiddenCount} hidden ingredient{hiddenCount > 1 ? 's' : ''}
@@ -1469,7 +1479,10 @@ function CompareProductColumn({
       {/* Bottom: Add to Plate Button */}
       <button
         type="button"
+        disabled={hasNoData}
+        title={hasNoData ? 'Nutrition data not found on label' : undefined}
         onClick={() => {
+          if (hasNoData) return
           onAddToPlate(
             productData.product || tag,
             calcs.sugarGrams,
@@ -1480,10 +1493,12 @@ function CompareProductColumn({
           setAdded(true)
           setTimeout(() => setAdded(false), 3000)
         }}
-        className={`toy-press font-display flex w-full items-center justify-center gap-1 rounded-xl border-2 border-toy-ink py-1.5 text-xs font-bold shadow-[0_2px_0_0_var(--toy-ink)] transition-all cursor-pointer ${
-          added
-            ? 'bg-toy-green text-white'
-            : 'bg-toy-yellow text-toy-ink hover:brightness-105 active:scale-95'
+        className={`toy-press font-display flex w-full items-center justify-center gap-1 rounded-xl border-2 border-toy-ink py-1.5 text-xs font-bold shadow-[0_2px_0_0_var(--toy-ink)] transition-all ${
+          hasNoData
+            ? 'bg-slate-200 text-toy-ink/40 border-toy-ink/40 shadow-none cursor-not-allowed opacity-60'
+            : added
+            ? 'bg-toy-green text-white cursor-pointer'
+            : 'bg-toy-yellow text-toy-ink hover:brightness-105 active:scale-95 cursor-pointer'
         }`}
       >
         {added ? (
