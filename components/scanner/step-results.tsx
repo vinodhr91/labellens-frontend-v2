@@ -278,7 +278,7 @@ function buildWhatsAppShareUrl(
       `⚠️ Nutrition table not found on this label. Check ingredients manually.`,
       `🔍 Flagged ingredients: ${flaggedText}`,
       '',
-      'Check your kitchen here: https://foodlabel-lens.vercel.app/',
+      'Check your kitchen here: https://labellens-frontend-v2.vercel.app/',
     ]
     return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`
   }
@@ -290,11 +290,11 @@ function buildWhatsAppShareUrl(
   if (calcs.satFatPct > calcs.sugarPct && calcs.satFatPct >= calcs.sodiumPct) {
     worstMetricName = 'Saturated Fat'
     worstPct = calcs.satFatPct
-    amountLine = `🥄 That's ${calcs.satFatGrams}g saturated fat.`
+    amountLine = `🧈 ${calcs.satFatGrams}g saturated fat (${worstPct}%).`
   } else if (calcs.sodiumPct > calcs.sugarPct && calcs.sodiumPct > calcs.satFatPct) {
     worstMetricName = 'Sodium'
     worstPct = calcs.sodiumPct
-    amountLine = `🥄 That's ${calcs.sodiumMg}mg sodium.`
+    amountLine = `🧂 ${calcs.sodiumMg}mg sodium (${worstPct}%).`
   }
 
   const lines = [
@@ -303,7 +303,7 @@ function buildWhatsAppShareUrl(
     amountLine,
     `🔍 Flagged ingredients: ${flaggedText}`,
     '',
-    'Check your kitchen here: https://foodlabel-lens.vercel.app/',
+    'Check your kitchen here: https://labellens-frontend-v2.vercel.app/',
   ]
 
   return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`
